@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 using UnrealBuildTool;
+using System.IO;
 
 public class ClimbForge : ModuleRules
 {
@@ -9,5 +10,7 @@ public class ClimbForge : ModuleRules
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput" });
-	}
+
+		PublicIncludePaths.Add(Path.Combine(ModuleDirectory, "Public"));
+	}	
 }
