@@ -51,6 +51,7 @@ public:
 #pragma region ClimbCore
 	void ToggleClimbing(const bool bEnableClimb);
 	bool IsClimbing() const;
+	FORCEINLINE FVector GetClimbableSurfaceNormal() const {return ClimbableSurfaceNormal;}
 #pragma endregion
 
 protected:

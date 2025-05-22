@@ -79,6 +79,8 @@ private:
 
 	/** Called for climb input */
 	void ClimbStarted(const FInputActionValue& Value);
+
+	void HandleClimbingMovement(const FVector2D MovementVector);
 };
 
 
