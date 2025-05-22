@@ -154,6 +154,22 @@ bool UClimbForgeMovementComponent::CanStartClimbing()
 	return true;
 }
 
+bool UClimbForgeMovementComponent::ShouldStopClimbing()
+{
+	if (ClimbableSurfacesHits.IsEmpty()) return true;
+
+	// This is theta = acos(a.b/|a|x|b|) as both the vectors are normalized or unit vector their magnitudes will be 1 thus 
+	// theta = acos(a.b)
+	const float DotResult = FVector::DotProduct(ClimbableSurfaceNormal, FVector::UpVector);
+	const float AngleInDeg = FMath::RadiansToDegrees(FMath::Acos(DotResult));
+
+	if (AngleInDeg <= MinimumClimbableAngleInDegrees)
+	{
+		return true;
+	}
+	return false;
+}
+
 void UClimbForgeMovementComponent::StartClimbing()
 {
 	SetMovementMode(MOVE_Custom, MOVE_Climbing);
@@ -202,6 +218,11 @@ void UClimbForgeMovementComponent::PhysClimbing(const float DeltaTime, int32 Ite
 	TraceClimbableSurfaces();
 	ProcessClimbableSurfaces();
 	// TODO - Check to see if climbing needs to stop
+	if (ShouldStopClimbing())
+	{
+		StopClimbing();
+	}
+	
 	RestorePreAdditiveRootMotionVelocity();
 
 	if( !HasAnimRootMotion() && !CurrentRootMotion.HasOverrideVelocity() )

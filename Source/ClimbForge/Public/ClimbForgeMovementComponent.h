@@ -44,6 +44,9 @@ private:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
 	float MaxClimbAcceleration = 300.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
+	float MinimumClimbableAngleInDegrees = 60.0f;
 	
 #pragma endregion
 
@@ -86,6 +89,7 @@ private:
 	FHitResult TraceFromEyeHeight(const float TraceDistance, const float TraceStartOffset = 0.0f);
 
 	bool CanStartClimbing();
+	bool ShouldStopClimbing();
 	void StartClimbing();
 	void StopClimbing();
 	void PhysClimbing(float DeltaTime, int32 Iterations);
