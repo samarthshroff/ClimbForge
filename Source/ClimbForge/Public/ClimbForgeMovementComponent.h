@@ -46,7 +46,7 @@ private:
 	float MaxClimbAcceleration = 300.0f;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
-	float MinimumClimbableAngleInDegrees = 60.0f;
+	float MinimumClimbableAngleInDegrees = 40.0f;
 	
 #pragma endregion
 
