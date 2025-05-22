@@ -1,22 +1,26 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
+
 #include "ClimbForgeCharacter.h"
+
 #include "Engine/LocalPlayer.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
-#include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "GameFramework/Controller.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
+#include "ClimbForgeMovementComponent.h"
+#include "LandscapeGizmoActiveActor.h"
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
 
 //////////////////////////////////////////////////////////////////////////
 // AClimbForgeCharacter
 
-AClimbForgeCharacter::AClimbForgeCharacter()
+AClimbForgeCharacter::AClimbForgeCharacter(const FObjectInitializer& ObjectInitializer)
+: Super(ObjectInitializer.SetDefaultSubobjectClass<UClimbForgeMovementComponent>(ACharacter::CharacterMovementComponentName))
 {
 	// Set size for collision capsule
 	GetCapsuleComponent()->InitCapsuleSize(42.f, 96.0f);
@@ -25,6 +29,8 @@ AClimbForgeCharacter::AClimbForgeCharacter()
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = false;
 	bUseControllerRotationRoll = false;
+
+	ClimbForgeMovementComponent = Cast<UClimbForgeMovementComponent>(GetCharacterMovement());
 
 	// Configure character movement
 	GetCharacterMovement()->bOrientRotationToMovement = true; // Character moves in the direction of input...	
@@ -85,6 +91,9 @@ void AClimbForgeCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInpu
 
 		// Looking
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &AClimbForgeCharacter::Look);
+
+		// Climb Action
+		EnhancedInputComponent->BindAction(ClimbAction, ETriggerEvent::Started, this, &AClimbForgeCharacter::ClimbStarted);
 	}
 	else
 	{
@@ -126,4 +135,10 @@ void AClimbForgeCharacter::Look(const FInputActionValue& Value)
 		AddControllerYawInput(LookAxisVector.X);
 		AddControllerPitchInput(LookAxisVector.Y);
 	}
+}
+
+void AClimbForgeCharacter::ClimbStarted(const FInputActionValue& Value)
+{
+	if (ClimbForgeMovementComponent == nullptr) return;
+	ClimbForgeMovementComponent->ToggleClimbing(!ClimbForgeMovementComponent->IsClimbing());
 }
