@@ -10,6 +10,7 @@
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/Character.h"
 
+#pragma region Overridden Functions
 void UClimbForgeMovementComponent::BeginPlay()
 {
 	Super::BeginPlay();
@@ -51,12 +52,31 @@ void UClimbForgeMovementComponent::PhysCustom(float DeltaTime, int32 Iterations)
 	Super::PhysCustom(DeltaTime, Iterations);
 }
 
+float UClimbForgeMovementComponent::GetMaxSpeed() const
+{
+	if (IsClimbing())
+	{
+		return MaxClimbSpeed;
+	}
+	return Super::GetMaxSpeed();
+}
+
+float UClimbForgeMovementComponent::GetMaxAcceleration() const
+{
+	if (IsClimbing())
+	{
+		return MaxClimbAcceleration;
+	}
+	return Super::GetMaxAcceleration();
+}
+#pragma endregion 
+
 #pragma region ClimbTraces
 TArray<FHitResult> UClimbForgeMovementComponent::CapsuleSweepTraceByChannel(const FVector& Start, const FVector& End, const bool bShowDebugShape, const bool bShowPersistent)
 {
 	TArray<FHitResult> OutCapsuleTraceHitResult;
 
-	const FCollisionShape CollisionShape = FCollisionShape::MakeCapsule(CollisionCapsuleRadius, CollisionCapsuleHalfHeight);	
+	const FCollisionShape CollisionShape = FCollisionShape::MakeCapsule(ClimbCollisionCapsuleRadius, ClimbCollisionCapsuleHalfHeight);	
 	
 	const bool bHit = GetWorld()->SweepMultiByChannel(OutCapsuleTraceHitResult, Start, End, FQuat::Identity, ClimbableSurfaceTraceChannel, CollisionShape, 
 	ClimbQueryParams);
@@ -69,7 +89,7 @@ TArray<FHitResult> UClimbForgeMovementComponent::CapsuleSweepTraceByChannel(cons
 		{
 			DebugTraceType = EDrawDebugTrace::Persistent;
 		}
-		DrawDebugCapsuleTraceMulti(GetWorld(), Start, End, CollisionCapsuleRadius, CollisionCapsuleHalfHeight, DebugTraceType, bHit,
+		DrawDebugCapsuleTraceMulti(GetWorld(), Start, End, ClimbCollisionCapsuleRadius, ClimbCollisionCapsuleHalfHeight, DebugTraceType, bHit,
 			OutCapsuleTraceHitResult, FLinearColor::Red, FLinearColor::Green, 5.0f);
 	}	
 	return OutCapsuleTraceHitResult;
@@ -182,7 +202,7 @@ void UClimbForgeMovementComponent::PhysClimbing(const float DeltaTime, int32 Ite
 	if( !HasAnimRootMotion() && !CurrentRootMotion.HasOverrideVelocity() )
 	{
 		// TODO - define max climb speed and acceleration
-		CalcVelocity(DeltaTime, Friction, true, MaxBrakeClimbingDeceleration);
+		CalcVelocity(DeltaTime, ClimbFriction, true, MaxBrakeClimbDeceleration);
 	}
 
 	ApplyRootMotionToVelocity(DeltaTime);
@@ -192,7 +212,7 @@ void UClimbForgeMovementComponent::PhysClimbing(const float DeltaTime, int32 Ite
 	FHitResult Hit(1.f);
 
 	// TODO - Handle Climb rotation.
-	SafeMoveUpdatedComponent(Adjusted, UpdatedComponent->GetComponentQuat(), true, Hit);
+	SafeMoveUpdatedComponent(Adjusted, GetClimbRotation(DeltaTime), true, Hit);
 
 	if (Hit.Time < 1.f)
 	{
@@ -206,6 +226,7 @@ void UClimbForgeMovementComponent::PhysClimbing(const float DeltaTime, int32 Ite
 	}
 
 	// TODO - Snap movement to climbable surfaces.
+	SnapToClimbableSurface(DeltaTime);
 }
 
 void UClimbForgeMovementComponent::ProcessClimbableSurfaces()
@@ -227,6 +248,39 @@ void UClimbForgeMovementComponent::ProcessClimbableSurfaces()
 	Debug::Print(TEXT("ClimbableSurfaceLocation:: ")+ ClimbableSurfaceLocation.ToCompactString(), FColor::Red, 1.0f);
 	Debug::Print(TEXT("ClimbableSurfaceNormal:: ")+ ClimbableSurfaceNormal.ToCompactString(), FColor::Orange, 2.0f);
 }
+
+FQuat UClimbForgeMovementComponent::GetClimbRotation(float DeltaTime)
+{
+	const FQuat CurrentQuat = UpdatedComponent->GetComponentQuat();
+
+	// If we want to use the root motion to override the rotation
+	if (HasAnimRootMotion() && CurrentRootMotion.HasOverrideVelocity())
+	{
+		return CurrentQuat;
+	}
+
+	// as the target needs to be the climbable surface and not it's normal.
+	const FQuat TargetQuat = FRotationMatrix::MakeFromX(-1.0f*ClimbableSurfaceNormal).ToQuat();
+
+	return FMath::QInterpTo(CurrentQuat,TargetQuat,DeltaTime,5.0f);	
+}
+
+inline void UClimbForgeMovementComponent::SnapToClimbableSurface(float DeltaTime)
+{
+	const FVector CurrentLocation = UpdatedComponent->GetComponentLocation();
+	const FVector ForwardVector = UpdatedComponent->GetForwardVector();
+
+	// Get the distance between the actor and the climbable surface location and project it onto the plane of the
+	// actor's forward vector. This is the vector facing the surface and having length equal to the distance
+	// between actor and the surface.
+	const FVector ProjectedVector = (ClimbableSurfaceLocation - CurrentLocation).ProjectOnTo(ForwardVector);
+
+	// The Vector (distance and direction) required for us to snap the actor to the climbable surface.
+	const FVector SnapVector = -1.0f*ClimbableSurfaceNormal*ProjectedVector.Length();
+
+	UpdatedComponent->MoveComponent(SnapVector*DeltaTime*MaxClimbSpeed, UpdatedComponent->GetComponentQuat(), true);	
+}
+
 #pragma endregion
 
 

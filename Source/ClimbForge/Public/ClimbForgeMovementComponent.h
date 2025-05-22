@@ -25,19 +25,25 @@ private:
 	
 #pragma region ClimbBPVariables
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
-	float CollisionCapsuleRadius = 50.0f;
+	float ClimbCollisionCapsuleRadius = 50.0f;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
-	float CollisionCapsuleHalfHeight = 72.0f;
+	float ClimbCollisionCapsuleHalfHeight = 72.0f;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
 	TEnumAsByte<ECollisionChannel> ClimbableSurfaceTraceChannel;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
-	float Friction = 0.0f;
+	float ClimbFriction = 0.0f;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
-	float MaxBrakeClimbingDeceleration = 400.0f;
+	float MaxBrakeClimbDeceleration = 400.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
+	float MaxClimbSpeed = 100.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
+	float MaxClimbAcceleration = 300.0f;
 	
 #pragma endregion
 
@@ -53,6 +59,8 @@ protected:
 	void TickComponent(float DeltaTime, enum ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 	virtual void OnMovementModeChanged(EMovementMode PreviousMovementMode, uint8 PreviousCustomMode) override;
 	void PhysCustom(float DeltaTime, int32 Iterations) override;
+	virtual float GetMaxSpeed() const override;
+	virtual float GetMaxAcceleration() const override;
 #pragma endregion
 
 	
@@ -80,6 +88,14 @@ private:
 	void StartClimbing();
 	void StopClimbing();
 	void PhysClimbing(float DeltaTime, int32 Iterations);
+
+	// Get the average location from all the climbable hit results.
 	void ProcessClimbableSurfaces();
+
+	// Get the rotation required to rotate the actor to face the climbable surface.
+	FQuat GetClimbRotation(float DeltaTime);
+
+	// Snap the actor (movement) to the climbable surface and lock onto it.
+	void SnapToClimbableSurface(float DeltaTime);
 #pragma endregion
 };
