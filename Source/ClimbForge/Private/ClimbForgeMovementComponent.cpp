@@ -37,6 +37,11 @@ void UClimbForgeMovementComponent::OnMovementModeChanged(EMovementMode PreviousM
 	{
 		bOrientRotationToMovement = true;		
 		CharacterOwner->GetCapsuleComponent()->SetCapsuleHalfHeight(96.0f);
+
+		const FRotator CurrentRotation = UpdatedComponent->GetComponentRotation();
+		const FRotator CorrectRotation = FRotator(0.0f, CurrentRotation.Yaw, 0.0f);
+		UpdatedComponent->SetRelativeRotation(CorrectRotation);
+		
 		StopMovementImmediately();
 	}
 	
