@@ -1,17 +1,11 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
-
+﻿// Copyright (c) Samarth Shroff. All Rights Reserved.
+// This work is protected under applicable copyright laws in perpetuity.
+// Licensed under the CC-BY-4.0 License. See LICENSE file for details.
 #pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "ClimbForgeMovementComponent.generated.h"
-
-UENUM(BlueprintType)
-enum ECustomMovementMode : int
-{
-	MOVE_Climbing UMETA(DisplayName="Climb Mode"),
-	MOVE_CUSTOM_MAX		UMETA(Hidden),
-};
 
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
 class CLIMBFORGE_API UClimbForgeMovementComponent : public UCharacterMovementComponent
@@ -21,6 +15,12 @@ class CLIMBFORGE_API UClimbForgeMovementComponent : public UCharacterMovementCom
 private:
 #pragma region ClimbCoreVariables
 	TArray<FHitResult> ClimbableSurfacesHits;
+
+	FCollisionQueryParams ClimbQueryParams;
+
+	FVector ClimbableSurfaceLocation;
+	
+	FVector ClimbableSurfaceNormal;
 #pragma endregion
 	
 #pragma region ClimbBPVariables
@@ -33,7 +33,12 @@ private:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
 	TEnumAsByte<ECollisionChannel> ClimbableSurfaceTraceChannel;
 
-	FCollisionQueryParams ClimbQueryParams;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
+	float Friction = 0.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
+	float MaxBrakeClimbingDeceleration = 400.0f;
+	
 #pragma endregion
 
 public:
@@ -43,18 +48,24 @@ public:
 #pragma endregion
 
 protected:
+#pragma region Overridden Functions
 	void BeginPlay() override;
 	void TickComponent(float DeltaTime, enum ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 	virtual void OnMovementModeChanged(EMovementMode PreviousMovementMode, uint8 PreviousCustomMode) override;
+	void PhysCustom(float DeltaTime, int32 Iterations) override;
+#pragma endregion
+
+	
 private:
 #pragma region ClimbTraces
 	// Use the Capsule shape with SweepMultiByChannel to check for any climbable surfaces from the ClimbableSurfaceTraceChannel 
-	TArray<FHitResult> CapsuleSweepTraceByChannel(const FVector& Start, const FVector& End, const bool bShowDebugShape, const bool bShowPersistent);
+	TArray<FHitResult> CapsuleSweepTraceByChannel(const FVector& Start, const FVector& End, const bool bShowDebugShape = false, const bool bShowPersistent = 
+	false);
 
 	// Use the LineTraceSingleByChannel to check for any climbable surface from the ClimbableSurfaceTraceChannel which is
 	// at the given start and end, usually the eye height, as character can be in front of a ledge which would come as a
 	// hit from the capsule sweep but is not a legit climbable surface.
-	FHitResult LineTraceByChannel(const FVector& Start, const FVector& End, const bool bShowDebugShape, const bool bShowPersistent);
+	FHitResult LineTraceByChannel(const FVector& Start, const FVector& End, const bool bShowDebugShape = false, const bool bShowPersistent = false);
 #pragma endregion
 
 #pragma region ClimbCore
@@ -68,5 +79,7 @@ private:
 	bool CanStartClimbing();
 	void StartClimbing();
 	void StopClimbing();
+	void PhysClimbing(float DeltaTime, int32 Iterations);
+	void ProcessClimbableSurfaces();
 #pragma endregion
 };

@@ -1,8 +1,10 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
-
+﻿// Copyright (c) Samarth Shroff. All Rights Reserved.
+// This work is protected under applicable copyright laws in perpetuity.
+// Licensed under the CC-BY-4.0 License. See LICENSE file for details.
 
 #include "ClimbForgeMovementComponent.h"
 
+#include "CustomMovementMode.h"
 #include "DebugHelper.h"
 #include "KismetTraceUtils.h"
 #include "Components/CapsuleComponent.h"
@@ -38,6 +40,15 @@ void UClimbForgeMovementComponent::OnMovementModeChanged(EMovementMode PreviousM
 	}
 	
 	Super::OnMovementModeChanged(PreviousMovementMode, PreviousCustomMode);
+}
+
+void UClimbForgeMovementComponent::PhysCustom(float DeltaTime, int32 Iterations)
+{
+	if (IsClimbing())
+	{
+		PhysClimbing(DeltaTime, Iterations);
+	}
+	Super::PhysCustom(DeltaTime, Iterations);
 }
 
 #pragma region ClimbTraces
@@ -143,7 +154,7 @@ bool UClimbForgeMovementComponent::TraceClimbableSurfaces()
 	// In this case 2 start and end as the forward vector is a unit vector.
 	const FVector End = Start + UpdatedComponent->GetForwardVector();
 
-	ClimbableSurfacesHits = CapsuleSweepTraceByChannel(Start, End, true, true);
+	ClimbableSurfacesHits = CapsuleSweepTraceByChannel(Start, End, true);
 	return !ClimbableSurfacesHits.IsEmpty();
 }
 
@@ -152,7 +163,69 @@ FHitResult UClimbForgeMovementComponent::TraceFromEyeHeight(const float TraceDis
 	const FVector EyeHeightOffset = UpdatedComponent->GetUpVector() * (CharacterOwner->BaseEyeHeight + TraceStartOffset);
 	const FVector Start = UpdatedComponent->GetComponentLocation() + EyeHeightOffset;
 	const FVector End = Start + (UpdatedComponent->GetForwardVector() * TraceDistance);
-	return LineTraceByChannel(Start, End, true, true);
+	return LineTraceByChannel(Start, End);
+}
+
+void UClimbForgeMovementComponent::PhysClimbing(const float DeltaTime, int32 Iterations)
+{
+	if (DeltaTime < MIN_TICK_TIME)
+	{
+		return;
+	}
+
+	// TODO - Process all climbable surfaces info
+	TraceClimbableSurfaces();
+	ProcessClimbableSurfaces();
+	// TODO - Check to see if climbing needs to stop
+	RestorePreAdditiveRootMotionVelocity();
+
+	if( !HasAnimRootMotion() && !CurrentRootMotion.HasOverrideVelocity() )
+	{
+		// TODO - define max climb speed and acceleration
+		CalcVelocity(DeltaTime, Friction, true, MaxBrakeClimbingDeceleration);
+	}
+
+	ApplyRootMotionToVelocity(DeltaTime);
+
+	const FVector OldLocation = UpdatedComponent->GetComponentLocation();
+	const FVector Adjusted = Velocity * DeltaTime;
+	FHitResult Hit(1.f);
+
+	// TODO - Handle Climb rotation.
+	SafeMoveUpdatedComponent(Adjusted, UpdatedComponent->GetComponentQuat(), true, Hit);
+
+	if (Hit.Time < 1.f)
+	{
+		HandleImpact(Hit, DeltaTime, Adjusted);
+		SlideAlongSurface(Adjusted, (1.f - Hit.Time), Hit.Normal, Hit, true);
+	}
+
+	if(!HasAnimRootMotion() && !CurrentRootMotion.HasOverrideVelocity())
+	{
+		Velocity = (UpdatedComponent->GetComponentLocation() - OldLocation) / DeltaTime;
+	}
+
+	// TODO - Snap movement to climbable surfaces.
+}
+
+void UClimbForgeMovementComponent::ProcessClimbableSurfaces()
+{
+	ClimbableSurfaceLocation = FVector::ZeroVector;
+	ClimbableSurfaceNormal = FVector::ZeroVector;
+
+	if (ClimbableSurfacesHits.IsEmpty()) return;
+
+	for (FHitResult SurfaceHits : ClimbableSurfacesHits)
+	{
+		ClimbableSurfaceLocation += SurfaceHits.ImpactPoint;
+		ClimbableSurfaceNormal += SurfaceHits.ImpactNormal;
+	}
+
+	ClimbableSurfaceLocation /= ClimbableSurfacesHits.Num();
+	ClimbableSurfaceNormal = ClimbableSurfaceNormal.GetSafeNormal();
+
+	Debug::Print(TEXT("ClimbableSurfaceLocation:: ")+ ClimbableSurfaceLocation.ToCompactString(), FColor::Red, 1.0f);
+	Debug::Print(TEXT("ClimbableSurfaceNormal:: ")+ ClimbableSurfaceNormal.ToCompactString(), FColor::Orange, 2.0f);
 }
 #pragma endregion
 
