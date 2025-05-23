@@ -149,12 +149,12 @@ bool UClimbForgeMovementComponent::CanStartClimbing()
 {
 	if (IsFalling()) return false;
 	if (!TraceClimbableSurfaces()) return false;
-
-	const float SurfaceSteepness = FVector::DotProduct(ClimbableSurfaceNormal, UpdatedComponent->GetForwardVector());
-	const float TraceDistance = 100.0f;
-	const float SteepnessMultiplier = 1.0f+(1.0f-SurfaceSteepness)*5.0f;
+	if (!TraceFromEyeHeight(100.0f).bBlockingHit) return false;
 	
-	if (!TraceFromEyeHeight(TraceDistance*SteepnessMultiplier).bBlockingHit) return false;
+	// const float SurfaceSteepness = FVector::DotProduct(ClimbableSurfaceNormal, UpdatedComponent->GetForwardVector());
+	// const float TraceDistance = 100.0f;
+	// const float SteepnessMultiplier = 1.0f+(1.0f-SurfaceSteepness)*5.0f;	
+	// if (!TraceFromEyeHeight(TraceDistance*SteepnessMultiplier).bBlockingHit) return false;
 
 	return true;
 }
