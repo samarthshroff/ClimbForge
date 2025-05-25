@@ -80,7 +80,6 @@ protected:
 	virtual float GetMaxSpeed() const override;
 	virtual float GetMaxAcceleration() const override;
 #pragma endregion
-
 	
 private:
 #pragma region ClimbTraces
@@ -104,6 +103,7 @@ private:
 
 	bool CanStartClimbing();
 	bool ShouldStopClimbing();
+	bool HasReachedTheFloor();
 	void StartClimbing();
 	void StopClimbing();
 	void PhysClimbing(float DeltaTime, int32 Iterations);

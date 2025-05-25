@@ -27,7 +27,7 @@ void UCharacterAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	
 	// Get the length of X and Y of velocity, so moving up and down does no affect.
 	GroundSpeed = Velocity.Size2D();
-	AirSpeed = Velocity.Z;	
+	AirSpeed = Velocity.Z;
 	ClimbVelocity = OwnerMovementComponent->GetUnrotatedClimbingVelocity();
 	
 	bShouldMove = OwnerMovementComponent->GetCurrentAcceleration() != FVector::ZeroVector && GroundSpeed > 3.0f;

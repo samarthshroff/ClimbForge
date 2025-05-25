@@ -141,14 +141,14 @@ void UClimbForgeMovementComponent::ToggleClimbing(const bool bEnableClimb)
 		if (CanStartClimbing())
 		{
 			// Enter Climb
-			Debug::Print(TEXT("Can Climb"));
+			//Debug::Print(TEXT("Can Climb"));
 			PlayMontage(IdleToClimbMontage);
 			//StartClimbing();
 		}
-		else
-		{
-			Debug::Print(TEXT("Cannot Climb"));
-		}
+		// else
+		// {
+		// 	Debug::Print(TEXT("Cannot Climb"));
+		// }
 	}
 	else
 	{
@@ -229,6 +229,39 @@ FHitResult UClimbForgeMovementComponent::TraceFromEyeHeight(const float TraceDis
 	return LineTraceByChannel(Start, End);
 }
 
+bool UClimbForgeMovementComponent::HasReachedTheFloor()
+{
+	// As we want to check for floor hit we need the down vector
+	const FVector DownVector = -1.0f*UpdatedComponent->GetUpVector();
+	// The constant value decides how close to the floor the actor needs to be for the transition to initiate.
+	const FVector StartOffset = DownVector * 35.0f;
+	const FVector Start = UpdatedComponent->GetComponentLocation() + StartOffset;
+	const FVector End = Start + DownVector;
+
+	TArray<FHitResult> PossibleFloorHits = CapsuleSweepTraceByChannel(Start, End, true);
+
+	if (PossibleFloorHits.IsEmpty()) return false;
+
+	for (const FHitResult& Hit : PossibleFloorHits)
+	{
+		// The hit is a legit floor only when the dot product of the impact normal and the up vector is equal
+		// to cos(1). a and b are parallel when dot(a,b) = a.Size()*b.Size()*cos(1). As the vectors are unit vectors
+		// here dot(a,b) = cos(1) which is what parallel function checks against.
+
+		// Collision with floor will be hit even when actor is about to climb up from floor but then the Z of the velocity will be
+		// either positive (jumping) or 0 (walking, running or other ground locomotion). it is negative only when actor is climbing down.
+		const bool bIsLegitFloor = FVector::Parallel(Hit.ImpactNormal, FVector::UpVector)  &&
+			GetUnrotatedClimbingVelocity().Z < -10.0f;
+		
+		if (bIsLegitFloor)
+		{
+			return true;
+		}
+	}
+	
+	return false;
+}
+
 void UClimbForgeMovementComponent::PhysClimbing(const float DeltaTime, int32 Iterations)
 {
 	if (DeltaTime < MIN_TICK_TIME)
@@ -240,7 +273,7 @@ void UClimbForgeMovementComponent::PhysClimbing(const float DeltaTime, int32 Ite
 	TraceClimbableSurfaces();
 	ProcessClimbableSurfaces();
 	// TODO - Check to see if climbing needs to stop
-	if (ShouldStopClimbing())
+	if (ShouldStopClimbing() || HasReachedTheFloor())
 	{
 		StopClimbing();
 	}
