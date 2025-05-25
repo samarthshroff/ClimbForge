@@ -9,8 +9,10 @@
 #include "KismetTraceUtils.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/Character.h"
+#include "Kismet/KismetMathLibrary.h"
 
 #pragma region Overridden Functions
+
 void UClimbForgeMovementComponent::BeginPlay()
 {
 	Super::BeginPlay();
@@ -198,6 +200,11 @@ void UClimbForgeMovementComponent::StopClimbing()
 bool UClimbForgeMovementComponent::IsClimbing() const
 {
 	return MovementMode == MOVE_Custom && CustomMovementMode == MOVE_Climbing;
+}
+
+FVector UClimbForgeMovementComponent::GetUnrotatedClimbingVelocity() const
+{
+	return UKismetMathLibrary::Quat_UnrotateVector(UpdatedComponent->GetComponentQuat(), Velocity);
 }
 
 bool UClimbForgeMovementComponent::TraceClimbableSurfaces()

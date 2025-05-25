@@ -64,6 +64,11 @@ public:
 	void ToggleClimbing(const bool bEnableClimb);
 	bool IsClimbing() const;
 	FORCEINLINE FVector GetClimbableSurfaceNormal() const {return ClimbableSurfaceNormal;}
+
+	// When the actor is climbing the velocity is rotated along with the actor's rotation (see - GetClimbRotation).
+	// In order to get the correct component velocity we need to unrotate it.
+	// It can be achieved by multiplying the Velocity with the inverse of actor's rotation (vector).
+	FVector GetUnrotatedClimbingVelocity() const;
 #pragma endregion
 
 protected:
