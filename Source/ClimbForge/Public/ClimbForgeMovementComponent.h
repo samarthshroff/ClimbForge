@@ -21,6 +21,12 @@ private:
 	FVector ClimbableSurfaceLocation;
 	
 	FVector ClimbableSurfaceNormal;
+
+	float OwnerColliderCapsuleHalfHeight;
+
+	UPROPERTY()
+	TObjectPtr<UAnimInstance> OwnerActorAnimInstance;
+	
 #pragma endregion
 	
 #pragma region ClimbBPVariables
@@ -47,6 +53,9 @@ private:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
 	float MinimumClimbableAngleInDegrees = 40.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
+	TObjectPtr<UAnimMontage> IdleToClimbMontage;
 	
 #pragma endregion
 
@@ -98,9 +107,15 @@ private:
 	void ProcessClimbableSurfaces();
 
 	// Get the rotation required to rotate the actor to face the climbable surface.
-	FQuat GetClimbRotation(float DeltaTime);
+	FQuat GetClimbRotation(float DeltaTime) const;
 
 	// Snap the actor (movement) to the climbable surface and lock onto it.
-	void SnapToClimbableSurface(float DeltaTime);
+	void SnapToClimbableSurface(float DeltaTime) const;
+
+	void PlayMontage(const TObjectPtr<UAnimMontage>& MontageToPlay) const;
+
+	UFUNCTION()
+	void MontageEnded(UAnimMontage* Montage, bool bInterrupted);
+
 #pragma endregion
 };

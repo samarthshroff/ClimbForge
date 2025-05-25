@@ -15,6 +15,15 @@ void UClimbForgeMovementComponent::BeginPlay()
 {
 	Super::BeginPlay();
 	ClimbQueryParams.AddIgnoredActor(GetOwner());
+
+	OwnerColliderCapsuleHalfHeight = GetCharacterOwner()->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+	
+	OwnerActorAnimInstance = GetCharacterOwner()->GetMesh()->GetAnimInstance();
+	if (OwnerActorAnimInstance != nullptr)
+	{
+		OwnerActorAnimInstance->OnMontageEnded.AddDynamic(this, &UClimbForgeMovementComponent::MontageEnded);
+		OwnerActorAnimInstance->OnMontageBlendingOut.AddDynamic(this, &UClimbForgeMovementComponent::MontageEnded);		
+	}
 }
 
 void UClimbForgeMovementComponent::TickComponent(float DeltaTime, enum ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -30,13 +39,13 @@ void UClimbForgeMovementComponent::OnMovementModeChanged(EMovementMode PreviousM
 	{
 		bOrientRotationToMovement = false;
 		// Half of 96.0f that is in AClimbForgeCharacter constructor.
-		CharacterOwner->GetCapsuleComponent()->SetCapsuleHalfHeight(48.0f);
+		CharacterOwner->GetCapsuleComponent()->SetCapsuleHalfHeight(OwnerColliderCapsuleHalfHeight*0.5f);
 	}
 
 	if (PreviousMovementMode == MOVE_Custom && PreviousCustomMode == MOVE_Climbing)
 	{
 		bOrientRotationToMovement = true;		
-		CharacterOwner->GetCapsuleComponent()->SetCapsuleHalfHeight(96.0f);
+		CharacterOwner->GetCapsuleComponent()->SetCapsuleHalfHeight(OwnerColliderCapsuleHalfHeight);
 
 		const FRotator CurrentRotation = UpdatedComponent->GetComponentRotation();
 		const FRotator CorrectRotation = FRotator(0.0f, CurrentRotation.Yaw, 0.0f);
@@ -131,7 +140,8 @@ void UClimbForgeMovementComponent::ToggleClimbing(const bool bEnableClimb)
 		{
 			// Enter Climb
 			Debug::Print(TEXT("Can Climb"));
-			StartClimbing();
+			PlayMontage(IdleToClimbMontage);
+			//StartClimbing();
 		}
 		else
 		{
@@ -200,7 +210,7 @@ bool UClimbForgeMovementComponent::TraceClimbableSurfaces()
 	// In this case 2 start and end as the forward vector is a unit vector.
 	const FVector End = Start + UpdatedComponent->GetForwardVector();
 
-	ClimbableSurfacesHits = CapsuleSweepTraceByChannel(Start, End, true);
+	ClimbableSurfacesHits = CapsuleSweepTraceByChannel(Start, End);
 	return !ClimbableSurfacesHits.IsEmpty();
 }
 
@@ -276,11 +286,11 @@ void UClimbForgeMovementComponent::ProcessClimbableSurfaces()
 	ClimbableSurfaceLocation /= ClimbableSurfacesHits.Num();
 	ClimbableSurfaceNormal = ClimbableSurfaceNormal.GetSafeNormal();
 
-	Debug::Print(TEXT("ClimbableSurfaceLocation:: ")+ ClimbableSurfaceLocation.ToCompactString(), FColor::Red, 1.0f);
-	Debug::Print(TEXT("ClimbableSurfaceNormal:: ")+ ClimbableSurfaceNormal.ToCompactString(), FColor::Orange, 2.0f);
+	// Debug::Print(TEXT("ClimbableSurfaceLocation:: ")+ ClimbableSurfaceLocation.ToCompactString(), FColor::Red, 1.0f);
+	// Debug::Print(TEXT("ClimbableSurfaceNormal:: ")+ ClimbableSurfaceNormal.ToCompactString(), FColor::Orange, 2.0f);
 }
 
-FQuat UClimbForgeMovementComponent::GetClimbRotation(float DeltaTime)
+FQuat UClimbForgeMovementComponent::GetClimbRotation(const float DeltaTime) const
 {
 	const FQuat CurrentQuat = UpdatedComponent->GetComponentQuat();
 
@@ -296,7 +306,7 @@ FQuat UClimbForgeMovementComponent::GetClimbRotation(float DeltaTime)
 	return FMath::QInterpTo(CurrentQuat,TargetQuat,DeltaTime,5.0f);	
 }
 
-inline void UClimbForgeMovementComponent::SnapToClimbableSurface(float DeltaTime)
+inline void UClimbForgeMovementComponent::SnapToClimbableSurface(const float DeltaTime) const
 {
 	const FVector CurrentLocation = UpdatedComponent->GetComponentLocation();
 	const FVector ForwardVector = UpdatedComponent->GetForwardVector();
@@ -310,6 +320,22 @@ inline void UClimbForgeMovementComponent::SnapToClimbableSurface(float DeltaTime
 	const FVector SnapVector = -1.0f*ClimbableSurfaceNormal*ProjectedVector.Length();
 
 	UpdatedComponent->MoveComponent(SnapVector*DeltaTime*MaxClimbSpeed, UpdatedComponent->GetComponentQuat(), true);	
+}
+
+void UClimbForgeMovementComponent::PlayMontage(const TObjectPtr<UAnimMontage>& MontageToPlay) const
+{
+	if(MontageToPlay == nullptr) return;
+	if (OwnerActorAnimInstance == nullptr) return;
+
+	OwnerActorAnimInstance->Montage_Play(MontageToPlay);
+}
+
+void UClimbForgeMovementComponent::MontageEnded(UAnimMontage* Montage, bool bInterrupted)
+{
+	if (Montage == IdleToClimbMontage)
+	{
+		StartClimbing();
+	}
 }
 
 #pragma endregion
