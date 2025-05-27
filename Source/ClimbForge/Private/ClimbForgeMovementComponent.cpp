@@ -85,6 +85,17 @@ float UClimbForgeMovementComponent::GetMaxAcceleration() const
 	}
 	return Super::GetMaxAcceleration();
 }
+
+FVector UClimbForgeMovementComponent::ConstrainAnimRootMotionVelocity(const FVector& RootMotionVelocity, const FVector& CurrentVelocity) const
+{
+	bool bIsRootMotionAnimation = IsFalling() && OwnerActorAnimInstance != nullptr && OwnerActorAnimInstance->IsAnyMontagePlaying();
+
+	if (bIsRootMotionAnimation)
+	{
+		return RootMotionVelocity;
+	}
+	return Super::ConstrainAnimRootMotionVelocity(RootMotionVelocity, CurrentVelocity);	
+}
 #pragma endregion 
 
 #pragma region ClimbTraces
@@ -238,7 +249,7 @@ bool UClimbForgeMovementComponent::HasReachedTheFloor()
 	const FVector Start = UpdatedComponent->GetComponentLocation() + StartOffset;
 	const FVector End = Start + DownVector;
 
-	TArray<FHitResult> PossibleFloorHits = CapsuleSweepTraceByChannel(Start, End, true);
+	TArray<FHitResult> PossibleFloorHits = CapsuleSweepTraceByChannel(Start, End);
 
 	if (PossibleFloorHits.IsEmpty()) return false;
 
@@ -262,6 +273,37 @@ bool UClimbForgeMovementComponent::HasReachedTheFloor()
 	return false;
 }
 
+bool UClimbForgeMovementComponent::HasReachedTheLedge()
+{
+	// Get the climbable surface steepness to have a dynamic length trace so it is not too short or not too long for that surface..
+	// Projecting the hit normal onto xy plane as a unit vector to get the direction.
+	// This is used to find the slope of the surface so that we can identify how long the trace should be.
+	const FVector ProjectedNormal = ClimbableSurfaceNormal.GetSafeNormal2D();
+	const float SurfaceSteepness = FVector::DotProduct(ProjectedNormal, ClimbableSurfaceNormal);
+	// steepness closer to one the multiplier is closer to zero so smaller trace
+	const float SteepnessMultiplier = 1.0f + (1.0f - SurfaceSteepness) * 5.0f;
+	const float TraceDistance = SteepnessMultiplier * 100.0f;
+
+	const FVector EyeHeightOffset = UpdatedComponent->GetUpVector() * (CharacterOwner->BaseEyeHeight+20.0f);
+	const FVector Start = UpdatedComponent->GetComponentLocation() + EyeHeightOffset;
+	FVector End = Start + (UpdatedComponent->GetForwardVector() * TraceDistance);
+		
+	const FHitResult Hit = LineTraceByChannel(Start, End, true);
+
+	if (!Hit.bBlockingHit)
+	{
+		End = Hit.TraceEnd;
+		End.Z -= 100.0f;
+		const FHitResult DownHit = LineTraceByChannel(Hit.TraceEnd, End, true);
+
+		// The second condition so that this returns true only when the actor is in motion. if the actor is
+		// in idle state near the ledge then this should return false.
+		if (DownHit.bBlockingHit && GetUnrotatedClimbingVelocity().Z > 10.0f) return true;
+	} 
+
+	return false;	
+}
+
 void UClimbForgeMovementComponent::PhysClimbing(const float DeltaTime, int32 Iterations)
 {
 	if (DeltaTime < MIN_TICK_TIME)
@@ -280,7 +322,7 @@ void UClimbForgeMovementComponent::PhysClimbing(const float DeltaTime, int32 Ite
 	
 	RestorePreAdditiveRootMotionVelocity();
 
-	if( !HasAnimRootMotion() && !CurrentRootMotion.HasOverrideVelocity() )
+	if(!HasAnimRootMotion() && !CurrentRootMotion.HasOverrideVelocity() )
 	{
 		// TODO - define max climb speed and acceleration
 		CalcVelocity(DeltaTime, ClimbFriction, true, MaxBrakeClimbDeceleration);
@@ -308,6 +350,11 @@ void UClimbForgeMovementComponent::PhysClimbing(const float DeltaTime, int32 Ite
 
 	// TODO - Snap movement to climbable surfaces.
 	SnapToClimbableSurface(DeltaTime);
+
+	if (HasReachedTheLedge())
+	{
+		PlayMontage(ClimbToTopMontage);
+	}
 }
 
 void UClimbForgeMovementComponent::ProcessClimbableSurfaces()
@@ -366,6 +413,7 @@ void UClimbForgeMovementComponent::PlayMontage(const TObjectPtr<UAnimMontage>& M
 {
 	if(MontageToPlay == nullptr) return;
 	if (OwnerActorAnimInstance == nullptr) return;
+	if (OwnerActorAnimInstance->IsAnyMontagePlaying()) return;
 
 	OwnerActorAnimInstance->Montage_Play(MontageToPlay);
 }
@@ -375,6 +423,11 @@ void UClimbForgeMovementComponent::MontageEnded(UAnimMontage* Montage, bool bInt
 	if (Montage == IdleToClimbMontage)
 	{
 		StartClimbing();
+	}
+	else
+	if (Montage == ClimbToTopMontage)
+	{
+		SetMovementMode(MOVE_Walking);
 	}
 }
 

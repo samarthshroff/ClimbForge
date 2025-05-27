@@ -52,10 +52,13 @@ private:
 	float MaxClimbAcceleration = 300.0f;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
-	float MinimumClimbableAngleInDegrees = 40.0f;
+	float MinimumClimbableAngleInDegrees = 60.0f;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
 	TObjectPtr<UAnimMontage> IdleToClimbMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
+	TObjectPtr<UAnimMontage> ClimbToTopMontage;
 	
 #pragma endregion
 
@@ -79,6 +82,7 @@ protected:
 	void PhysCustom(float DeltaTime, int32 Iterations) override;
 	virtual float GetMaxSpeed() const override;
 	virtual float GetMaxAcceleration() const override;
+	virtual FVector ConstrainAnimRootMotionVelocity(const FVector& RootMotionVelocity, const FVector& CurrentVelocity) const override;
 #pragma endregion
 	
 private:
@@ -104,6 +108,7 @@ private:
 	bool CanStartClimbing();
 	bool ShouldStopClimbing();
 	bool HasReachedTheFloor();
+	bool HasReachedTheLedge();
 	void StartClimbing();
 	void StopClimbing();
 	void PhysClimbing(float DeltaTime, int32 Iterations);
