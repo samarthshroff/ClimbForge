@@ -54,11 +54,20 @@ private:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
 	float MinimumClimbableAngleInDegrees = 60.0f;
 
+	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Character Movement: Climb",meta = (AllowPrivateAccess = "true"))
+	float ClimbDownWalkableSurfaceTraceOffset = 100.f;
+
+	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Character Movement: Climb",meta = (AllowPrivateAccess = "true"))
+	float ClimbDownLedgeTraceOffset = 50.f;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
 	TObjectPtr<UAnimMontage> IdleToClimbMontage;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
 	TObjectPtr<UAnimMontage> ClimbToTopMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
+	TObjectPtr<UAnimMontage> ClimbDownFromLegdeMontage;
 	
 #pragma endregion
 
@@ -106,6 +115,7 @@ private:
 	FHitResult TraceFromEyeHeight(const float TraceDistance, const float TraceStartOffset = 0.0f);
 
 	bool CanStartClimbing();
+	bool CanStartClimbingDown();
 	bool ShouldStopClimbing();
 	bool HasReachedTheFloor();
 	bool HasReachedTheLedge();

@@ -33,6 +33,7 @@ void UClimbForgeMovementComponent::TickComponent(float DeltaTime, enum ELevelTic
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 	// TraceClimbableSurfaces();
 	// TraceFromEyeHeight(100.0f);
+	//CanStartClimbingDown();
 }
 
 void UClimbForgeMovementComponent::OnMovementModeChanged(EMovementMode PreviousMovementMode, uint8 PreviousCustomMode)
@@ -151,15 +152,13 @@ void UClimbForgeMovementComponent::ToggleClimbing(const bool bEnableClimb)
 	{
 		if (CanStartClimbing())
 		{
-			// Enter Climb
-			//Debug::Print(TEXT("Can Climb"));
 			PlayMontage(IdleToClimbMontage);
-			//StartClimbing();
 		}
-		// else
-		// {
-		// 	Debug::Print(TEXT("Cannot Climb"));
-		// }
+		else
+		if (CanStartClimbingDown())
+		{
+			PlayMontage(ClimbDownFromLegdeMontage);
+		}
 	}
 	else
 	{
@@ -180,6 +179,31 @@ bool UClimbForgeMovementComponent::CanStartClimbing()
 	// if (!TraceFromEyeHeight(TraceDistance*SteepnessMultiplier).bBlockingHit) return false;
 
 	return true;
+}
+
+bool UClimbForgeMovementComponent::CanStartClimbingDown()
+{
+	if(IsFalling()) return false;
+
+	 const FVector ComponentForward = UpdatedComponent->GetForwardVector();
+	 const FVector DownVector = -1.0f * UpdatedComponent->GetUpVector();
+	
+	 const FVector WalkableSurfaceTraceStart = UpdatedComponent->GetComponentLocation() + ComponentForward * ClimbDownWalkableSurfaceTraceOffset;
+	 const FVector WalkableSurfaceTraceEnd = WalkableSurfaceTraceStart + DownVector * 100.f;
+	
+	 FHitResult WalkableSurfaceHit = LineTraceByChannel(WalkableSurfaceTraceStart,WalkableSurfaceTraceEnd);
+	
+	 const FVector LedgeTraceStart = WalkableSurfaceHit.TraceStart + ComponentForward * ClimbDownLedgeTraceOffset;
+	 const FVector LedgeTraceEnd = LedgeTraceStart + DownVector * 200.f;
+	
+	 FHitResult LedgeTraceHit = LineTraceByChannel(LedgeTraceStart,LedgeTraceEnd);
+	
+	 if(WalkableSurfaceHit.bBlockingHit && !LedgeTraceHit.bBlockingHit)
+	 {
+	 	return true;
+	 }
+	
+	return false;
 }
 
 bool UClimbForgeMovementComponent::ShouldStopClimbing()
@@ -288,13 +312,13 @@ bool UClimbForgeMovementComponent::HasReachedTheLedge()
 	const FVector Start = UpdatedComponent->GetComponentLocation() + EyeHeightOffset;
 	FVector End = Start + (UpdatedComponent->GetForwardVector() * TraceDistance);
 		
-	const FHitResult Hit = LineTraceByChannel(Start, End, true);
+	const FHitResult Hit = LineTraceByChannel(Start, End);
 
 	if (!Hit.bBlockingHit)
 	{
 		End = Hit.TraceEnd;
 		End.Z -= 100.0f;
-		const FHitResult DownHit = LineTraceByChannel(Hit.TraceEnd, End, true);
+		const FHitResult DownHit = LineTraceByChannel(Hit.TraceEnd, End);
 
 		// The second condition so that this returns true only when the actor is in motion. if the actor is
 		// in idle state near the ledge then this should return false.
@@ -420,9 +444,10 @@ void UClimbForgeMovementComponent::PlayMontage(const TObjectPtr<UAnimMontage>& M
 
 void UClimbForgeMovementComponent::MontageEnded(UAnimMontage* Montage, bool bInterrupted)
 {
-	if (Montage == IdleToClimbMontage)
+	if (Montage == IdleToClimbMontage || Montage == ClimbDownFromLegdeMontage)
 	{
 		StartClimbing();
+		StopMovementImmediately();
 	}
 	else
 	if (Montage == ClimbToTopMontage)
