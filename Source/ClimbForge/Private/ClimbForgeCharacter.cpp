@@ -13,6 +13,7 @@
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
 #include "ClimbForgeMovementComponent.h"
+#include "DebugHelper.h"
 #include "MotionWarpingComponent.h"
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
@@ -69,14 +70,7 @@ void AClimbForgeCharacter::NotifyControllerChanged()
 {
 	Super::NotifyControllerChanged();
 
-	// Add Input Mapping Context
-	if (APlayerController* PlayerController = Cast<APlayerController>(Controller))
-	{
-		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PlayerController->GetLocalPlayer()))
-		{
-			Subsystem->AddMappingContext(DefaultMappingContext, 0);
-		}
-	}
+	AddInputMappingContext(DefaultMappingContext, 0);
 }
 
 void AClimbForgeCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -89,13 +83,15 @@ void AClimbForgeCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInpu
 		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Completed, this, &ACharacter::StopJumping);
 
 		// Moving
-		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &AClimbForgeCharacter::Move);
+		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &AClimbForgeCharacter::HandleGroundMovement);
 
 		// Looking
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &AClimbForgeCharacter::Look);
 
 		// Climb Action
 		EnhancedInputComponent->BindAction(ClimbAction, ETriggerEvent::Started, this, &AClimbForgeCharacter::ClimbStarted);
+		EnhancedInputComponent->BindAction(ClimbMoveAction, ETriggerEvent::Triggered, this, &AClimbForgeCharacter::HandleClimbingMovement);
+		EnhancedInputComponent->BindAction(ClimbHopAction, ETriggerEvent::Started, this, &AClimbForgeCharacter::ClimbHopStarted);
 	}
 	else
 	{
@@ -103,40 +99,34 @@ void AClimbForgeCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInpu
 	}
 }
 
-void AClimbForgeCharacter::Move(const FInputActionValue& Value)
+void AClimbForgeCharacter::HandleGroundMovement(const FInputActionValue& Value)
 {
 	// input is a Vector2D
 	const FVector2D MovementVector = Value.Get<FVector2D>();
 
-	if (ClimbForgeMovementComponent == nullptr) return;
-
-	if (ClimbForgeMovementComponent->IsClimbing())
+	if (Controller != nullptr)
 	{
-		HandleClimbingMovement(MovementVector);
-	}
-	else
-	{
-		if (Controller != nullptr)
-		{
-			// find out which way is forward
-			const FRotator Rotation = Controller->GetControlRotation();
-			const FRotator YawRotation(0, Rotation.Yaw, 0);
+		// find out which way is forward
+		const FRotator Rotation = Controller->GetControlRotation();
+		const FRotator YawRotation(0, Rotation.Yaw, 0);
 
-			// get forward vector
-			const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
-	
-			// get right vector 
-			const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
+		// get forward vector
+		const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
 
-			// add movement 
-			AddMovementInput(ForwardDirection, MovementVector.Y);
-			AddMovementInput(RightDirection, MovementVector.X);
-		}
-	}
+		// get right vector 
+		const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
+
+		// add movement 
+		AddMovementInput(ForwardDirection, MovementVector.Y);
+		AddMovementInput(RightDirection, MovementVector.X);
+	}	
 }
 
-void AClimbForgeCharacter::HandleClimbingMovement(const FVector2D MovementVector)
+void AClimbForgeCharacter::HandleClimbingMovement(const FInputActionValue& Value)
 {
+	// input is a Vector2D
+	const FVector2D MovementVector = Value.Get<FVector2D>();
+	
 	// Using the Left hand (instead of right hand) rule for cross product 
 	// get forward vector
 	const FVector ForwardDirection = FVector::CrossProduct(-1.0f*ClimbForgeMovementComponent->GetClimbableSurfaceNormal(), GetActorRightVector());
@@ -166,5 +156,33 @@ void AClimbForgeCharacter::ClimbStarted(const FInputActionValue& Value)
 {
 	if (ClimbForgeMovementComponent == nullptr) return;
 	ClimbForgeMovementComponent->ToggleClimbing(!ClimbForgeMovementComponent->IsClimbing());
+}
+
+void AClimbForgeCharacter::AddInputMappingContext(const UInputMappingContext* InContext, const int32 InPriority)
+{
+	check(InContext);
+	// Add Input Mapping Context
+	if (APlayerController* PlayerController = Cast<APlayerController>(Controller))
+	{
+		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PlayerController->GetLocalPlayer()))
+		{
+			Subsystem->AddMappingContext(InContext, InPriority);
+		}
+	}
+}
+
+void AClimbForgeCharacter::RemoveInputMappingContext(const UInputMappingContext* InContext)
+{
+	check(InContext);
+	if (APlayerController* PlayerController = Cast<APlayerController>(Controller))
+	{
+		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PlayerController->GetLocalPlayer()))
+		{
+			if (Subsystem->HasMappingContext(InContext))
+			{
+				Subsystem->RemoveMappingContext(InContext);
+			}			
+		}
+	}
 }
 
