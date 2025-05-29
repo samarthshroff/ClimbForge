@@ -9,6 +9,7 @@
 #include "ClimbForgeCharacter.generated.h"
 
 class UClimbForgeMovementComponent;
+class UMotionWarpingComponent;
 class USpringArmComponent;
 class UCameraComponent;
 class UInputMappingContext;
@@ -54,6 +55,9 @@ private:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UClimbForgeMovementComponent> ClimbForgeMovementComponent;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UMotionWarpingComponent> MotionWarpingComponent;
+	
 public:
 	AClimbForgeCharacter(const FObjectInitializer& ObjectInitializer);
 	
@@ -63,6 +67,7 @@ public:
 	FORCEINLINE class UCameraComponent* GetFollowCamera() const { return FollowCamera; }
 
 	FORCEINLINE UClimbForgeMovementComponent* GetClimbForgeMovementComponent() const { return ClimbForgeMovementComponent; }
+	FORCEINLINE UMotionWarpingComponent* GetMotionWarpingComponent() const { return MotionWarpingComponent; }
 	
 protected:
 	virtual void NotifyControllerChanged() override;
