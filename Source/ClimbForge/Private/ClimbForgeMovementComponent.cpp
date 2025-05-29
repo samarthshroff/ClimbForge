@@ -337,9 +337,8 @@ bool UClimbForgeMovementComponent::HasReachedTheLedge()
 void UClimbForgeMovementComponent::TryStartVaulting()
 {
 	FVector VaultStartPosition = FVector::ZeroVector;
-	FVector VaultPeakPosition = FVector::ZeroVector;
 	FVector VaultLandPosition = FVector::ZeroVector;
-	if (CanStartVaulting(VaultStartPosition,  VaultPeakPosition, VaultLandPosition))
+	if (CanStartVaulting(VaultStartPosition,  VaultLandPosition))
 	{
 		//Start Vaulting - motion warp and play montage;
 		SetMotionWarpTarget("VaultStart", VaultStartPosition);
@@ -349,7 +348,7 @@ void UClimbForgeMovementComponent::TryStartVaulting()
 	}
 }
 
-bool UClimbForgeMovementComponent::CanStartVaulting(FVector& VaultStartPosition,FVector& VaultPeakPosition, FVector& VaultLandPosition)
+bool UClimbForgeMovementComponent::CanStartVaulting(FVector& VaultStartPosition, FVector& VaultLandPosition)
 {
 	if (IsFalling()) return false;
 
@@ -388,40 +387,6 @@ bool UClimbForgeMovementComponent::CanStartVaulting(FVector& VaultStartPosition,
 	VaultStartPosition = ObstacleHit.Location;
 	HighestZClearance = FMath::Max(HighestZClearance, ObstacleHit.Location.Z);
 
-	// // Validate obstacle height (ensure it's a valid vaultable height)
-	// const float ObstacleHeight = ObstacleHit.Location.Z - ComponentLocation.Z; // Relative to character's base
-	// UE_LOG(LogTemp, Log, TEXT("ObstacleHeight:: %f"), ObstacleHeight);
-	// if (ObstacleHeight > MaximumVaultableHeight || ObstacleHeight < MinimumVaultableHeight)
-	// {
-	// 	// Obstacle too high or too low to vault over.
-	// 	return false;
-	// }
-
-	// // 2. Ensure Clearance over the obstacle.
-	// const float CharHalfHeight = ClimbCollisionCapsuleHalfHeight;// CharacterOwner->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
-	// const float CharRadius = ClimbCollisionCapsuleRadius;//CharacterOwner->GetCapsuleComponent()->GetScaledCapsuleRadius();
-	//
-	// // Slightly below full character height
-	// FVector ClearanceStartLocation = ComponentLocation + (UpVector * TraceHeightAboveChar);//ComponentLocation + (UpVector * (CharHalfHeight * 0.9f));
-	// // Extend past max possible landing spot
-	// FVector ClearanceEndLocation = ClearanceStartLocation + (ForwardVector * (LandingTraceInterval * TotalLandingTraces + CharRadius));
-	//
-	// FHitResult ClearanceHit;
-	// const FCollisionShape CollisionShape = FCollisionShape::MakeCapsule(CharRadius * 0.8f, CharHalfHeight * 0.9f);	
-	//
-	// const bool bClearanceBlocked = GetWorld()->SweepSingleByChannel(ClearanceHit, ClearanceStartLocation, ClearanceEndLocation, FQuat::Identity,
-	// 	ClimbableSurfaceTraceChannel, CollisionShape, ClimbQueryParams);
-	//
-	// // DrawDebugCapsuleTraceSingle(GetWorld(), ClearanceStartLocation, ClearanceEndLocation, CharRadius * 0.8f, CharHalfHeight * 0.9f, EDrawDebugTrace::Persistent, bClearanceBlocked,
-	// // ClearanceHit, FLinearColor::Blue, FLinearColor::Green, 5.0f);
-	//
-	// if (bClearanceBlocked)
-	// {
-	// 	UE_LOG(LogTemp, Log, TEXT("blocked by clearance"));
-	// 	// Something is blocking the path above the obstacle, cannot vault.
-	// 	return false;
-	// }
-	
 	// 3. Find the Vault Landing Position (Iterative Fallback)
 	// Start tracing for landing spot *after* the obstacle.
 	FVector CurrentLandingTraceOrigin = ObstacleTraceStart + (ForwardVector * LandingTraceInterval);
@@ -431,17 +396,15 @@ bool UClimbForgeMovementComponent::CanStartVaulting(FVector& VaultStartPosition,
 		const FVector Start = CurrentLandingTraceOrigin;
 		const FVector End = Start + (DownVector*VerticalTraceDepth*(i+1));
 
-		UE_LOG(LogTemp, Log, TEXT("Start:: %s, End:: %s for i:: %d"), *Start.ToCompactString(), *End.ToCompactString(), i);
+		//UE_LOG(LogTemp, Log, TEXT("Start:: %s, End:: %s for i:: %d"), *Start.ToCompactString(), *End.ToCompactString(), i);
 
-		FHitResult LandingHit = LineTraceByChannel(Start, End, true, true);
+		FHitResult LandingHit = LineTraceByChannel(Start, End);
 				
 		CurrentLandingTraceOrigin += (ForwardVector * LandingTraceInterval);
 		
 		if (!LandingHit.bBlockingHit)
 		{
-			UE_LOG(LogTemp, Log, TEXT("No Landing Hit i:: %d"), i);
-			//break;
-
+			//UE_LOG(LogTemp, Log, TEXT("No Landing Hit i:: %d"), i);
 			// If no hit, move further forward for the next landing trace
 			continue;
 		}
@@ -452,23 +415,6 @@ bool UClimbForgeMovementComponent::CanStartVaulting(FVector& VaultStartPosition,
 
 	if (VaultStartPosition != FVector::ZeroVector && VaultLandPosition != FVector::ZeroVector)
 	{
-		// // Add a final sanity check for the landing position.
-		// // Even if we found a hit, is it *reasonable* for a landing?
-		// // E.g., is the Z difference between vault start and vault land too great?
-		// // This defines what is vault in the game. 
-		// // If VaultLandPosition.Z is much lower than VaultStartPosition.Z, it might be a drop, not a vault.
-		// // If VaultLandPosition.Z is much higher, it might be a climb.
-		// float ZDifference = FMath::Abs(VaultLandPosition.Z - VaultStartPosition.Z);
-		// if (ZDifference > MaximumVaultableHeight) // Reusing MaxVaultableHeight as a general Z offset tolerance
-		// {
-		// 	// The landing spot is too high or too low relative to the vault start for a natural vault animation.
-		// 	return false;
-		// }
-		
-		// VaultPeakPosition = FMath::Lerp(VaultStartPosition, VaultLandPosition, 0.5f);
-		// VaultPeakPosition.Z = HighestZClearance;
-		// VaultStartPosition.Z = HighestZClearance;
-		// VaultLandPosition.Z = HighestZClearance;
 		return true;
 	}
 	
@@ -604,34 +550,7 @@ void UClimbForgeMovementComponent::MontageEnded(UAnimMontage* Montage, bool bInt
 	else
 	if (Montage == VaultingMontage)
 	{
-		SetMovementMode(MOVE_Walking);
-		// const FVector ComponentLocation = UpdatedComponent->GetComponentLocation();
-		// const FVector UpVector = UpdatedComponent->GetUpVector();
-		// const FVector DownVector = -1.0f * UpVector;
-		//
-		// const FVector Start = ComponentLocation + UpVector*50.0f;
-		// const FVector End = ComponentLocation + DownVector*200.0f;
-		//
-		// FHitResult GroundHit = LineTraceByChannel(Start, End, true, true);
-		// if (GroundHit.bBlockingHit)
-		// {
-		// 	if (ComponentLocation.Z-GroundHit.Location.Z < 100.0f) // short drop
-		// 	{
-		// 		CharacterOwner->SetActorLocation(GroundHit.Location);				
-		// 		SetMovementMode(MOVE_Walking);	
-		// 	}
-		// 	else // significant drop
-		// 	{
-		// 		SetMovementMode(MOVE_Falling);
-		// 		Velocity = FVector(0.f, 0.f, -200.f);
-		// 	}			
-		// }
-		// else // really significant drop
-		// {
-		// 	SetMovementMode(MOVE_Falling);
-		// 	Velocity = FVector(0.f, 0.f, -200.f);
-		// }
-		
+		SetMovementMode(MOVE_Walking);	
 	}
 }
 

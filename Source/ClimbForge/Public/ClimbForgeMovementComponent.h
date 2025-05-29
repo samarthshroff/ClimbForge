@@ -74,14 +74,6 @@ private:
 
 	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Character Movement: Vault", meta = (AllowPrivateAccess = "true"))
 	float MaximumVaultTraceDistance = 200.f;
-
-	// // Min height difference (e.g., don't vault over tiny bumps)
-	// UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Character Movement: Vault", meta = (AllowPrivateAccess = "true"))
-	// float MinimumVaultableHeight = 30.f;
-	//
-	// // Max height difference from character base to obstacle top
-	// UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Character Movement: Vault", meta = (AllowPrivateAccess = "true"))
-	// float MaximumVaultableHeight = 150.f;
 	
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Vault", meta=(AllowPrivateAccess=true))
 	TObjectPtr<UAnimMontage> VaultingMontage;
@@ -137,7 +129,7 @@ private:
 	bool HasReachedTheFloor();
 	bool HasReachedTheLedge();
 	void TryStartVaulting();
-	bool CanStartVaulting(FVector& VaultStartPosition,FVector& VaultPeakPosition, FVector& VaultLandPosition);	
+	bool CanStartVaulting(FVector& VaultStartPosition, FVector& VaultLandPosition);	
 	void StartClimbing();
 	void StopClimbing();
 	void PhysClimbing(float DeltaTime, int32 Iterations);
