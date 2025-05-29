@@ -376,17 +376,24 @@ bool UClimbForgeMovementComponent::CanStartVaulting(FVector& VaultStartPosition,
 	const FVector ObstacleTraceStart = ComponentLocation + (UpVector * TraceHeightAboveChar) + (ForwardVector * InitialTraceDistance);
 	const FVector ObstacleTraceEnd = ObstacleTraceStart + (DownVector * VerticalTraceDepth);
 
-	const FHitResult ObstacleHit = LineTraceByChannel(ObstacleTraceStart, ObstacleTraceEnd);
+	const FHitResult ObstacleHit = LineTraceByChannel(ObstacleTraceStart, ObstacleTraceEnd, true, true);
 
 	if (!ObstacleHit.bBlockingHit)
 	{
 		// No obstacle found to vault over immediately in front.
 		return false;
 	}
+	if ( FVector::DistSquared(ObstacleHit.Location, ObstacleHit.TraceStart) < VerticalTraceDepthSquaredHalf )
+	{
+		// If the impact point is closer to the trace start then
+		// the impact is probably a climbable surface instead of a vaulting surface.
+		return false;
+	}
 
 	VaultStartPosition = ObstacleHit.Location;
 	HighestZClearance = FMath::Max(HighestZClearance, ObstacleHit.Location.Z);
-
+	
+	
 	// 3. Find the Vault Landing Position (Iterative Fallback)
 	// Start tracing for landing spot *after* the obstacle.
 	FVector CurrentLandingTraceOrigin = ObstacleTraceStart + (ForwardVector * LandingTraceInterval);
@@ -398,7 +405,7 @@ bool UClimbForgeMovementComponent::CanStartVaulting(FVector& VaultStartPosition,
 
 		//UE_LOG(LogTemp, Log, TEXT("Start:: %s, End:: %s for i:: %d"), *Start.ToCompactString(), *End.ToCompactString(), i);
 
-		FHitResult LandingHit = LineTraceByChannel(Start, End);
+		FHitResult LandingHit = LineTraceByChannel(Start, End, true, true);
 				
 		CurrentLandingTraceOrigin += (ForwardVector * LandingTraceInterval);
 		
