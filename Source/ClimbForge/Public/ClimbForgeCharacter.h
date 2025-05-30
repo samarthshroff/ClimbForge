@@ -85,6 +85,7 @@ protected:
 	virtual void NotifyControllerChanged() override;
 
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+	 void BeginPlay() override;
 	
 private:
 	/** Called for looking input */
@@ -92,10 +93,13 @@ private:
 
 	/** Called for climb input */
 	void ClimbStarted(const FInputActionValue& Value);
+	void ClimbHopStarted(const FInputActionValue& Value);
 
 	void HandleClimbingMovement(const FInputActionValue& Value);
 	void HandleGroundMovement(const FInputActionValue& Value);
 
+	void OnEnterClimbingMode();
+	void OnExitClimbingMode();
 
 	void AddInputMappingContext(const UInputMappingContext* InContext, int32 InPriority);
 	void RemoveInputMappingContext(const UInputMappingContext* InContext);

@@ -63,6 +63,16 @@ AClimbForgeCharacter::AClimbForgeCharacter(const FObjectInitializer& ObjectIniti
 	// are set in the derived blueprint asset named ThirdPersonCharacter (to avoid direct content references in C++)
 }
 
+void AClimbForgeCharacter::BeginPlay()
+{
+	Super::BeginPlay();
+	if (ClimbForgeMovementComponent != nullptr)
+	{
+		ClimbForgeMovementComponent->OnEnterClimbingMode.BindUObject(this, &AClimbForgeCharacter::OnEnterClimbingMode);
+		ClimbForgeMovementComponent->OnExitClimbingMode.BindUObject(this, &AClimbForgeCharacter::OnExitClimbingMode);
+	}
+}
+
 //////////////////////////////////////////////////////////////////////////
 // Input
 
@@ -138,7 +148,6 @@ void AClimbForgeCharacter::HandleClimbingMovement(const FInputActionValue& Value
 	AddMovementInput(RightDirection, MovementVector.X);
 }
 
-
 void AClimbForgeCharacter::Look(const FInputActionValue& Value)
 {
 	// input is a Vector2D
@@ -156,6 +165,22 @@ void AClimbForgeCharacter::ClimbStarted(const FInputActionValue& Value)
 {
 	if (ClimbForgeMovementComponent == nullptr) return;
 	ClimbForgeMovementComponent->ToggleClimbing(!ClimbForgeMovementComponent->IsClimbing());
+}
+
+void AClimbForgeCharacter::ClimbHopStarted(const FInputActionValue& Value)
+{
+	if (ClimbForgeMovementComponent == nullptr) return;
+	ClimbForgeMovementComponent->RequestClimbHopping();
+}
+
+void AClimbForgeCharacter::OnEnterClimbingMode()
+{
+	AddInputMappingContext(ClimbingMappingContext, 1);
+}
+
+void AClimbForgeCharacter::OnExitClimbingMode()
+{
+	RemoveInputMappingContext(ClimbingMappingContext);
 }
 
 void AClimbForgeCharacter::AddInputMappingContext(const UInputMappingContext* InContext, const int32 InPriority)

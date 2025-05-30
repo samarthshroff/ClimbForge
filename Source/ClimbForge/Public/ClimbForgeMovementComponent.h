@@ -7,11 +7,18 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "ClimbForgeMovementComponent.generated.h"
 
+enum class EClimbingDirection : uint8;
+DECLARE_DELEGATE(FOnEnterClimbingModeDelegate);
+DECLARE_DELEGATE(FOnExitClimbingModeDelegate);
+
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
 class CLIMBFORGE_API UClimbForgeMovementComponent : public UCharacterMovementComponent
 {
 	GENERATED_BODY()
-
+public:
+	FOnEnterClimbingModeDelegate OnEnterClimbingMode;
+	FOnExitClimbingModeDelegate OnExitClimbingMode;
+	
 private:
 #pragma region ClimbCoreVariables
 	TArray<FHitResult> ClimbableSurfacesHits;
@@ -26,6 +33,8 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UAnimInstance> OwnerActorAnimInstance;
+
+	FVector CharacterLocationBeforeHopMontage;
 	
 #pragma endregion
 	
@@ -60,6 +69,15 @@ private:
 	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Character Movement: Climb",meta = (AllowPrivateAccess = "true"))
 	float ClimbDownLedgeTraceOffset = 50.f;
 
+	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Character Movement: Climb",meta = (AllowPrivateAccess = "true"))
+	float ClimbHoppingTraceLength = 100.0f;
+
+	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Character Movement: Climb",meta = (AllowPrivateAccess = "true"))
+	float ClimbHoppingEyeHeightTraceOffset = -20.0f;
+
+	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Character Movement: Climb",meta = (AllowPrivateAccess = "true"))
+	float ClimbHoppingEdgeTraceOffset = 150.0f;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
 	TObjectPtr<UAnimMontage> IdleToClimbMontage;
 
@@ -68,6 +86,18 @@ private:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
 	TObjectPtr<UAnimMontage> ClimbDownFromLegdeMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
+	TObjectPtr<UAnimMontage> HopClimbUpMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
+	TObjectPtr<UAnimMontage> HopClimbDownMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
+	TObjectPtr<UAnimMontage> HopClimbLeftMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
+	TObjectPtr<UAnimMontage> HopClimbRightMontage;
 
 	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Character Movement: Vault", meta = (AllowPrivateAccess = "true"))
 	float MinimumVaultTraceDistance = 50.f;
@@ -83,6 +113,8 @@ private:
 public:
 #pragma region ClimbCore
 	void ToggleClimbing(const bool bEnableClimb);
+	void RequestClimbHopping();
+	
 	bool IsClimbing() const;
 	FORCEINLINE FVector GetClimbableSurfaceNormal() const {return ClimbableSurfaceNormal;}
 
@@ -121,10 +153,11 @@ private:
 
 	// Trace from the eye height and see if the ray collides with an object.
 	// This helps us decide whether the character can climb.
-	FHitResult TraceFromEyeHeight(const float TraceDistance, const float TraceStartOffset = 0.0f);
+	FHitResult TraceFromEyeHeight(const float TraceDistance, const float TraceStartOffset = 0.0f, const bool bShowDebugShape = false, const bool 
+	bShowPersistent = false);
 
 	bool CanStartClimbing();
-	bool CanStartClimbingDown();
+	bool CanStartClimbingDown();	
 	bool ShouldStopClimbing();
 	bool HasReachedTheFloor();
 	bool HasReachedTheLedge();
@@ -132,6 +165,10 @@ private:
 	bool CanStartVaulting(FVector& VaultStartPosition, FVector& VaultLandPosition);	
 	void StartClimbing();
 	void StopClimbing();
+
+	bool CanStartClimbHopping(const EClimbingDirection ClimbingDirection, FVector& OutHopHitPoint);
+	void TryPerformClimbHopping(const EClimbingDirection ClimbingDirection);
+	
 	void PhysClimbing(float DeltaTime, int32 Iterations);
 
 	// Get the average location from all the climbable hit results.
