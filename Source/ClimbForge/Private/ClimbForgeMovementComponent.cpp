@@ -34,11 +34,6 @@ void UClimbForgeMovementComponent::BeginPlay()
 void UClimbForgeMovementComponent::TickComponent(float DeltaTime, enum ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-	// TraceClimbableSurfaces();
-	// TraceFromEyeHeight(100.0f);
-	//CanStartClimbingDown();
-	// FVector OutHopHitPoint;
-	// CanStartClimbHopping(EClimbingDirection::Left, OutHopHitPoint);
 }
 
 void UClimbForgeMovementComponent::OnMovementModeChanged(EMovementMode PreviousMovementMode, uint8 PreviousCustomMode)
@@ -158,7 +153,7 @@ void UClimbForgeMovementComponent::ToggleClimbing(const bool bEnableClimb)
 	if (bEnableClimb)
 	{
 		if (CanStartClimbing())
-		{
+		{		
 			PlayMontage(IdleToClimbMontage);
 		}
 		else
@@ -525,6 +520,10 @@ FQuat UClimbForgeMovementComponent::GetClimbRotation(const float DeltaTime) cons
 
 inline void UClimbForgeMovementComponent::SnapToClimbableSurface(const float DeltaTime) const
 {
+	// Do not try to snap while a montage (mainly a climb hop montage) is playing.
+	// this let's the character move to a neighboring wall.
+	if (OwnerActorAnimInstance->IsAnyMontagePlaying()) return;
+	
 	const FVector CurrentLocation = UpdatedComponent->GetComponentLocation();
 	const FVector ForwardVector = UpdatedComponent->GetForwardVector();
 
@@ -568,7 +567,6 @@ void UClimbForgeMovementComponent::MontageEnded(UAnimMontage* Montage, bool bInt
 	else
 	if (Montage == HopClimbLeftMontage || Montage == HopClimbRightMontage)
 	{
-		Debug::Print(TEXT("Character Location after montage ends:: ")+UpdatedComponent->GetComponentLocation().ToCompactString());
 		FVector CurrentLocation = UpdatedComponent->GetComponentLocation();
 		if (CurrentLocation.Z != CharacterLocationBeforeHopMontage.Z)
 		{
@@ -587,34 +585,35 @@ void UClimbForgeMovementComponent::SetMotionWarpTarget(const FName& InWarpTarget
 }
 
 void UClimbForgeMovementComponent::RequestClimbHopping()
-{
+{	
 	const FVector UnrotatedLastInputVector = UKismetMathLibrary::Quat_UnrotateVector(UpdatedComponent->GetComponentQuat(), GetLastInputVector());
-
-	// for now only 4 directions - up, down, left and right NO diagonals as I don't have the animations.
+		
 	const float VerticalAxisDotResult = FVector::DotProduct(UnrotatedLastInputVector.GetSafeNormal(), UpdatedComponent->GetUpVector());
-	const float HorizontalAxisDotResult = FVector::DotProduct(UnrotatedLastInputVector.GetSafeNormal(), UpdatedComponent->GetRightVector());
+	
+	const FVector UnrotatedRightVector = UKismetMathLibrary::Quat_UnrotateVector(UpdatedComponent->GetComponentQuat(), UpdatedComponent->GetRightVector());
+	const float HorizontalAxisDotResult = FVector::DotProduct(UnrotatedLastInputVector.GetSafeNormal(), UnrotatedRightVector);
 	
 	if (VerticalAxisDotResult > 0.9f)
 	{
-		Debug::Print(TEXT("Hop up"), FColor::Blue,1);
+		//Debug::Print(TEXT("Hop up"), FColor::Blue,1);
 		TryPerformClimbHopping(EClimbingDirection::Up);
 	}
 	else
 	if (VerticalAxisDotResult < -0.9f)
 	{
-		Debug::Print(TEXT("Hop down"), FColor::Green, 1);
+		//Debug::Print(TEXT("Hop down"), FColor::Green, 1);
 		TryPerformClimbHopping(EClimbingDirection::Down);
 	}
 	else
 	if (HorizontalAxisDotResult > 0.9f)
 	{
-		Debug::Print(TEXT("Hop Right"), FColor::Blue,1);
+		//Debug::Print(TEXT("Hop Right"), FColor::Blue,1);
 		TryPerformClimbHopping(EClimbingDirection::Right);
 	}
 	else
 	if (HorizontalAxisDotResult < -0.9f)
 	{
-		Debug::Print(TEXT("Hop Left"), FColor::Green, 1);
+		//Debug::Print(TEXT("Hop Left"), FColor::Green, 1);
 		TryPerformClimbHopping(EClimbingDirection::Left);
 	}
 	else
@@ -688,21 +687,21 @@ bool UClimbForgeMovementComponent::CanStartClimbHopping(const EClimbingDirection
 
 		case EClimbingDirection::Left:
 		{		
-			HopHit = TraceFromEyeHeight(ClimbHoppingTraceLength, ClimbHoppingEyeHeightTraceOffset, true, true);
+			HopHit = TraceFromEyeHeight(ClimbHoppingTraceLength, ClimbHoppingEyeHeightTraceOffset);
 			const FVector EyeLevelVector = UpdatedComponent->GetComponentLocation() + (UpdatedComponent->GetUpVector() * CharacterOwner->BaseEyeHeight + ClimbHoppingEyeHeightTraceOffset);
 			const FVector Start = EyeLevelVector + (-1.0f*UpdatedComponent->GetRightVector()*ClimbHoppingEdgeTraceOffset);				
 			const FVector End = Start + (UpdatedComponent->GetForwardVector() * ClimbHoppingTraceLength);
-			EdgeHit = LineTraceByChannel(Start, End, true, true);
+			EdgeHit = LineTraceByChannel(Start, End);
 		}
 		break;
 
 		case EClimbingDirection::Right:
 		{
-			HopHit = TraceFromEyeHeight(ClimbHoppingTraceLength, ClimbHoppingEyeHeightTraceOffset, true, true);
+			HopHit = TraceFromEyeHeight(ClimbHoppingTraceLength, ClimbHoppingEyeHeightTraceOffset);
 			const FVector EyeLevelVector = UpdatedComponent->GetComponentLocation() + (UpdatedComponent->GetUpVector() * CharacterOwner->BaseEyeHeight + ClimbHoppingEyeHeightTraceOffset);
 			const FVector Start = EyeLevelVector + (UpdatedComponent->GetRightVector()*ClimbHoppingEdgeTraceOffset);				
 			const FVector End = Start + (UpdatedComponent->GetForwardVector() * ClimbHoppingTraceLength);
-			EdgeHit = LineTraceByChannel(Start, End, true, true);
+			EdgeHit = LineTraceByChannel(Start, End);
 		}
 		break;
 		
