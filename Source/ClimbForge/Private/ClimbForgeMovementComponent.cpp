@@ -305,7 +305,7 @@ bool UClimbForgeMovementComponent::HasReachedTheFloor()
 
 bool UClimbForgeMovementComponent::HasReachedTheLedge()
 {
-	// Get the climbable surface steepness to have a dynamic length trace so it is not too short or not too long for that surface..
+	// Get the climbable surface steepness to have a dynamic length trace so it is not too short or not too long for that surface.
 	// Projecting the hit normal onto xy plane as a unit vector to get the direction.
 	// This is used to find the slope of the surface so that we can identify how long the trace should be.
 	const FVector ProjectedNormal = ClimbableSurfaceNormal.GetSafeNormal2D();
@@ -318,13 +318,13 @@ bool UClimbForgeMovementComponent::HasReachedTheLedge()
 	const FVector Start = UpdatedComponent->GetComponentLocation() + EyeHeightOffset;
 	FVector End = Start + (UpdatedComponent->GetForwardVector() * TraceDistance);
 		
-	const FHitResult Hit = LineTraceByChannel(Start, End);
+	const FHitResult Hit = LineTraceByChannel(Start, End, true);
 
 	if (!Hit.bBlockingHit)
 	{
 		End = Hit.TraceEnd;
 		End.Z -= 100.0f;
-		const FHitResult DownHit = LineTraceByChannel(Hit.TraceEnd, End);
+		const FHitResult DownHit = LineTraceByChannel(Hit.TraceEnd, End, true);
 
 		// The second condition so that this returns true only when the actor is in motion. if the actor is
 		// in idle state near the ledge then this should return false.
@@ -522,7 +522,11 @@ inline void UClimbForgeMovementComponent::SnapToClimbableSurface(const float Del
 {
 	// Do not try to snap while a montage (mainly a climb hop montage) is playing.
 	// this let's the character move to a neighboring wall.
-	if (OwnerActorAnimInstance->IsAnyMontagePlaying()) return;
+	if (OwnerActorAnimInstance->IsAnyMontagePlaying() &&
+		(OwnerActorAnimInstance->GetCurrentActiveMontage() == HopClimbLeftMontage ||
+		OwnerActorAnimInstance->GetCurrentActiveMontage() == HopClimbRightMontage ||
+		OwnerActorAnimInstance->GetCurrentActiveMontage() == HopClimbUpMontage ||
+		OwnerActorAnimInstance->GetCurrentActiveMontage() == HopClimbDownMontage)) return;
 	
 	const FVector CurrentLocation = UpdatedComponent->GetComponentLocation();
 	const FVector ForwardVector = UpdatedComponent->GetForwardVector();
