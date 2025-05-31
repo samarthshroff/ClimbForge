@@ -318,13 +318,13 @@ bool UClimbForgeMovementComponent::HasReachedTheLedge()
 	const FVector Start = UpdatedComponent->GetComponentLocation() + EyeHeightOffset;
 	FVector End = Start + (UpdatedComponent->GetForwardVector() * TraceDistance);
 		
-	const FHitResult Hit = LineTraceByChannel(Start, End, true);
+	const FHitResult Hit = LineTraceByChannel(Start, End);
 
 	if (!Hit.bBlockingHit)
 	{
 		End = Hit.TraceEnd;
 		End.Z -= 100.0f;
-		const FHitResult DownHit = LineTraceByChannel(Hit.TraceEnd, End, true);
+		const FHitResult DownHit = LineTraceByChannel(Hit.TraceEnd, End);
 
 		// The second condition so that this returns true only when the actor is in motion. if the actor is
 		// in idle state near the ledge then this should return false.
