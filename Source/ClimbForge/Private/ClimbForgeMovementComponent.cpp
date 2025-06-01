@@ -34,6 +34,9 @@ void UClimbForgeMovementComponent::BeginPlay()
 void UClimbForgeMovementComponent::TickComponent(float DeltaTime, enum ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	FVector VaultStartPosition = FVector::ZeroVector;
+	FVector VaultLandPosition = FVector::ZeroVector;
+	CanStartVaulting(VaultStartPosition,  VaultLandPosition);
 }
 
 void UClimbForgeMovementComponent::OnMovementModeChanged(EMovementMode PreviousMovementMode, uint8 PreviousCustomMode)
@@ -368,7 +371,7 @@ bool UClimbForgeMovementComponent::CanStartVaulting(FVector& VaultStartPosition,
 	constexpr float VerticalTraceDepth = 100.0f;
 	const float VerticalTraceDepthSquaredHalf = (VerticalTraceDepth*VerticalTraceDepth)*0.5f;
 	// How many landing traces to perform after the initial vault obstacle trace
-	constexpr int32 TotalLandingTraces = 5;
+	//constexpr int32 TotalLandingTraces = 5;
 
 	// 1. Find the Vault Obstacle (Vault Start Position)
 	const float SpeedRatio = Velocity.Size() / GetMaxSpeed();
@@ -393,33 +396,48 @@ bool UClimbForgeMovementComponent::CanStartVaulting(FVector& VaultStartPosition,
 
 	VaultStartPosition = ObstacleHit.Location;
 	HighestZClearance = FMath::Max(HighestZClearance, ObstacleHit.Location.Z);
-	
-	
-	// 3. Find the Vault Landing Position (Iterative Fallback)
-	// Start tracing for landing spot *after* the obstacle.
-	FVector CurrentLandingTraceOrigin = ObstacleTraceStart + (ForwardVector * LandingTraceInterval);
-	
-	for (int32 i = 0;i<TotalLandingTraces;++i)
+
+	FVector LandingTraceStart = ObstacleHit.Location + (UpVector * 20.0f); // raise slightly above surface
+	// Max vault obstacle length. If the obstacle is longer than this then the vault montage ends on the obstacle
+	// else it ends on the ground.
+	float MaxVaultLength = 300.0f;
+
+	FVector ObstacleEdgeLocation;
+	FHitResult ObstacleEdgeDetectionHit;
+	bool bObstacleEdgeFound = false;
+
+	for (float Distance = 50.0f; Distance <= MaxVaultLength; Distance += 50.0f)
 	{
-		const FVector Start = CurrentLandingTraceOrigin;
-		const FVector End = Start + (DownVector*VerticalTraceDepth*(i+1));
-
-		//UE_LOG(LogTemp, Log, TEXT("Start:: %s, End:: %s for i:: %d"), *Start.ToCompactString(), *End.ToCompactString(), i);
-
-		FHitResult LandingHit = LineTraceByChannel(Start, End);
-				
-		CurrentLandingTraceOrigin += (ForwardVector * LandingTraceInterval);
+		FVector Start = LandingTraceStart + ForwardVector * Distance;
+		FVector End = Start + (DownVector * VerticalTraceDepth);
 		
-		if (!LandingHit.bBlockingHit)
+		ObstacleEdgeDetectionHit = LineTraceByChannel(Start, End);		
+		if (!ObstacleEdgeDetectionHit.bBlockingHit)
 		{
-			//UE_LOG(LogTemp, Log, TEXT("No Landing Hit i:: %d"), i);
-			// If no hit, move further forward for the next landing trace
-			continue;
-		}
+			// No ledge beneath — we've reached the end of the ledge
+			ObstacleEdgeLocation = Start;
+			bObstacleEdgeFound = true;
+			break;
+		}		
+	}
+	
+	if (bObstacleEdgeFound)
+	{
+		// End of obstacle + padding
+		// Find the Ground Z or else vault montage will end mid air.
+		const FVector GroundZTraceStart = ObstacleEdgeLocation + ForwardVector * 30.0f;
+		const FVector GroundZTraceEnd = GroundZTraceStart + (DownVector * VerticalTraceDepth*5.0f);
+		const FHitResult GroundHit = LineTraceByChannel(GroundZTraceStart, GroundZTraceEnd);
 		
-		VaultLandPosition = LandingHit.Location;			
-		HighestZClearance = FMath::Max(HighestZClearance, LandingHit.Location.Z);
-	}	
+		if (GroundHit.bBlockingHit)
+		{
+			VaultLandPosition = GroundHit.Location;
+		}
+	}
+	else
+	{
+		VaultLandPosition = ObstacleEdgeDetectionHit.Location; // default vault forward
+	}
 
 	if (VaultStartPosition != FVector::ZeroVector && VaultLandPosition != FVector::ZeroVector)
 	{
