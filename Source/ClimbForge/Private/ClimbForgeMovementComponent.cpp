@@ -418,7 +418,7 @@ bool UClimbForgeMovementComponent::CanStartVaulting(FVector& VaultStartPosition,
 			ObstacleEdgeLocation = Start;
 			bObstacleEdgeFound = true;
 			break;
-		}		
+		}
 	}
 	
 	if (bObstacleEdgeFound)
