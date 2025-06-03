@@ -140,7 +140,7 @@ TArray<FHitResult> UClimbForgeMovementComponent::CapsuleSweepTraceByChannel(cons
 			DebugTraceType = EDrawDebugTrace::Persistent;
 		}
 		DrawDebugCapsuleTraceMulti(GetWorld(), Start, End, ClimbCollisionCapsuleRadius, ClimbCollisionCapsuleHalfHeight, DebugTraceType, bHit,
-			OutCapsuleTraceHitResult, FLinearColor::Red, FLinearColor::Green, 5.0f);
+			OutCapsuleTraceHitResult, FLinearColor::Blue, FLinearColor::Red, 5.0f);
 	}	
 	return OutCapsuleTraceHitResult;
 }
@@ -612,10 +612,29 @@ void UClimbForgeMovementComponent::ProcessClimbableSurfaces()
 
 	if (ClimbableSurfacesHits.IsEmpty()) return;
 
+	const FVector SweepStart = UpdatedComponent->GetComponentLocation();
+	const FCollisionShape SphereShape = FCollisionShape::MakeSphere(5.0f);
+
+	//Debug::Print(TEXT("ClimbableSurfacesHits:: ")+FString::FromInt(ClimbableSurfacesHits.Num()));
+	
 	for (FHitResult SurfaceHits : ClimbableSurfacesHits)
 	{
-		ClimbableSurfaceLocation += SurfaceHits.ImpactPoint;
-		ClimbableSurfaceNormal += SurfaceHits.ImpactNormal;
+		// Sometimes with overlapping surfaces we can get slightly incorrect normals.
+		// The sweep is already present in the collision done by overlap thus making the normal(s) point towards the center.
+		//  This makes the character rotate incorrectly while climbing.
+		// So doing a sphere sweep to each hit we have from the character location would give us correct straight normals.
+		const FVector DirectionVector = (SurfaceHits.ImpactPoint - SweepStart).GetSafeNormal();
+		const FVector End = SweepStart + DirectionVector * 100.0f;// some arbitrary length.
+
+		FHitResult SphereHit;
+		const bool bHit = GetWorld()->SweepSingleByChannel(SphereHit, SweepStart, End, FQuat::Identity, ClimbableSurfaceTraceChannel,
+			SphereShape, ClimbQueryParams);
+
+		DrawDebugSphereTraceSingle(GetWorld(), SweepStart, End, 5.0f,EDrawDebugTrace::ForOneFrame, bHit, SphereHit, FColor::Blue, FColor::Red, 25.0f);
+		
+		
+		ClimbableSurfaceLocation += SphereHit.ImpactPoint;
+		ClimbableSurfaceNormal += SphereHit.ImpactNormal;
 	}
 
 	ClimbableSurfaceLocation /= ClimbableSurfacesHits.Num();
@@ -662,7 +681,8 @@ inline void UClimbForgeMovementComponent::SnapToClimbableSurface(const float Del
 	// The Vector (distance and direction) required for us to snap the actor to the climbable surface.
 	const FVector SnapVector = -1.0f*ClimbableSurfaceNormal*(ProjectedVector.Length()-45.0f);
 
-	UpdatedComponent->MoveComponent(SnapVector*DeltaTime*MaxClimbSpeed, UpdatedComponent->GetComponentQuat(), true);	
+	const float SnapSpeed = 5.0f * ((Velocity.Length() / MaxClimbSpeed) + 1);
+	UpdatedComponent->MoveComponent(SnapVector * SnapSpeed * DeltaTime, UpdatedComponent->GetComponentQuat(), true);
 }
 
 void UClimbForgeMovementComponent::PlayMontage(const TObjectPtr<UAnimMontage>& MontageToPlay) const
