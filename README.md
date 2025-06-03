@@ -57,3 +57,32 @@ ClimbForge is an advanced Unreal Engine climbing movement system, inspired by th
 - **Trace Calculations:**  
   All traces (for climb, ledge, vault, etc.) are positionally offset and use vector math for direction, length, and surface normal evaluation.
 
+## License and Usage
+
+This project is licensed under the [Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International (CC BY-NC-ND 4.0)](https://creativecommons.org/licenses/by-nc-nd/4.0/).
+[![License: CC BY-NC-ND 4.0](https://licensebuttons.net/l/by-nc-nd/4.0/88x31.png)](http://creativecommons.org/licenses/by-nc-nd/4.0/)
+
+### What does this mean?
+- **Personal/Non-Commercial Use:**  
+  You are free to view, download, and share this project for personal and non-commercial purposes, as long as you provide appropriate credit to the author.
+
+- **No Derivatives:**  
+  You may not modify, remix, or create derivative works based on this project. Pull requests and contributions are not accepted.
+
+- **Commercial Use:**  
+  Commercial use of this project, in whole or in part, is not permitted without explicit written permission from the author. If you wish to use this project commercially, please contact [samarthshroff](mailto:samarthshroff@gmail.com) to discuss licensing and attribution requirements.
+
+### Unreal Engine Content Notice
+This project may include content (code, binaries, or assets) provided by Epic Games, Inc. (“Epic”) under the Unreal Engine End User License Agreement (EULA).  
+Such content is subject to the [Unreal Engine EULA](https://www.unrealengine.com/eula) and may not be redistributed except as permitted by that agreement.
+
+### Summary Table
+
+| Use Case           | Allowed? | Notes                                                                 |
+|--------------------|----------|-----------------------------------------------------------------------|
+| Personal/Portfolio | ✅       | Credit required                                                      |
+| Non-Commercial     | ✅       | Credit required                                                      |
+| Commercial         | ❌       | Contact author for permission and credit requirements                 |
+| Modification       | ❌       | No derivatives; do not submit pull requests or modified versions      |
+
+For more details, see the [LICENSE](LICENSE) file in this repository.
