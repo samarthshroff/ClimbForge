@@ -35,6 +35,11 @@ private:
 	TObjectPtr<UAnimInstance> OwnerActorAnimInstance;
 
 	FVector CharacterLocationBeforeHopMontage;
+
+	bool bMoveToTargetAfterClimb = false;
+	FVector ClimbToLedgeTargetLocation;
+	float LedgeSurfaceSlopeDegrees;
+	bool bUsedMotionWarpForLedgeClimb = false;
 	
 #pragma endregion
 	
@@ -61,7 +66,7 @@ private:
 	float MaxClimbAcceleration = 300.0f;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
-	float MinimumClimbableAngleInDegrees = 60.0f;
+	float MinimumClimbableAngleInDegrees = 25.0f;
 
 	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Character Movement: Climb",meta = (AllowPrivateAccess = "true"))
 	float ClimbDownWalkableSurfaceTraceOffset = 100.f;

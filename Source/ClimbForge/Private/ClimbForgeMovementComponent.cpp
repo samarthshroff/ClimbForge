@@ -34,9 +34,26 @@ void UClimbForgeMovementComponent::BeginPlay()
 void UClimbForgeMovementComponent::TickComponent(float DeltaTime, enum ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-	FVector VaultStartPosition = FVector::ZeroVector;
-	FVector VaultLandPosition = FVector::ZeroVector;
-	CanStartVaulting(VaultStartPosition,  VaultLandPosition);
+	TraceClimbableSurfaces();
+
+	if (bMoveToTargetAfterClimb)
+	{
+		const FVector ToTarget = ClimbToLedgeTargetLocation - UpdatedComponent->GetComponentLocation();
+		const float Distance = ToTarget.Size2D();
+		const FVector DesiredVelocity = ToTarget.GetSafeNormal2D() * 230.0f; //230.0f from the walk/run blendspace. walk anim is played at 230.0f
+		Velocity = DesiredVelocity;
+		Acceleration = Velocity;// Not correct physics but faking it to set the bShouldMove to true.
+		Acceleration.Z = 0.0f;
+
+		if (Distance < 5.0f)
+		{
+			bMoveToTargetAfterClimb = false;
+			Acceleration = FVector::ZeroVector;
+			ClimbToLedgeTargetLocation = FVector::ZeroVector;
+			LedgeSurfaceSlopeDegrees = 0.0f;
+			StopMovementImmediately();		
+		}
+	}
 }
 
 void UClimbForgeMovementComponent::OnMovementModeChanged(EMovementMode PreviousMovementMode, uint8 PreviousCustomMode)
@@ -54,9 +71,9 @@ void UClimbForgeMovementComponent::OnMovementModeChanged(EMovementMode PreviousM
 		bOrientRotationToMovement = true;		
 		CharacterOwner->GetCapsuleComponent()->SetCapsuleHalfHeight(OwnerColliderCapsuleHalfHeight);
 
-		const FRotator CurrentRotation = UpdatedComponent->GetComponentRotation();
-		const FRotator CorrectRotation = FRotator(0.0f, CurrentRotation.Yaw, 0.0f);
-		UpdatedComponent->SetRelativeRotation(CorrectRotation);
+		// Set Rotation to Stand
+		const FRotator StandRotation = FRotator(0.0f, UpdatedComponent->GetComponentRotation().Yaw, 0.0f);
+		UpdatedComponent->SetRelativeRotation(StandRotation);
 		
 		StopMovementImmediately();
 		OnExitClimbingMode.ExecuteIfBound();
@@ -156,7 +173,7 @@ void UClimbForgeMovementComponent::ToggleClimbing(const bool bEnableClimb)
 	if (bEnableClimb)
 	{
 		if (CanStartClimbing())
-		{		
+		{
 			PlayMontage(IdleToClimbMontage);
 		}
 		else
@@ -179,15 +196,48 @@ void UClimbForgeMovementComponent::ToggleClimbing(const bool bEnableClimb)
 bool UClimbForgeMovementComponent::CanStartClimbing()
 {
 	if (IsFalling()) return false;
-	if (!TraceClimbableSurfaces()) return false;
-	if (!TraceFromEyeHeight(100.0f).bBlockingHit) return false;
+	//if (!TraceClimbableSurfaces()) return false;
+
+	// Check if it is a climbable surface by checking it's slope in degrees.
+	for (FHitResult& Hit : ClimbableSurfacesHits)
+	{
+		// This is in theory the surface (to climb) normal projected onto a horizontal plane as
+		// GetSafeNormal2D uses on X and Y components.
+		const FVector HorizontalProjectedNormal = Hit.Normal.GetSafeNormal2D();
+
+		// The slope or angle between the character forward and the hit normal. This determines if the surface is climbable.
+		const float HorizontalDot = FVector::DotProduct(UpdatedComponent->GetForwardVector(), -HorizontalProjectedNormal);
+		// This is theta = acos(a.b/|a|x|b|) as both the vectors are normalized or unit vector their magnitudes will be 1 thus 
+		// theta = acos(a.b)
+		const float AngleInDegrees = FMath::RadiansToDegrees(FMath::Acos(HorizontalDot));
+
+		// Detect if the surface to climb is a ceiling or not. If a ceiling then don't climb.
+		const float Steepness = FVector::DotProduct(Hit.Normal, HorizontalProjectedNormal);
+		// IF nearly zero means that the normal of this surface is parallel to upvector so it can be a ceiling or a floor
+		const bool bIsCeilingOrFloor = FMath::IsNearlyZero(Steepness);
+
+		// Calculate the length of the trace to use for checking if there is a surface at eye height. This check is for the surface that give
+		// a valid hit from the ClimbableSurfacesHits but are like small ledges that are not climbable.
+		constexpr float BaseLength = 80.0f;
+		const float SteepnessMultiplier = 1.0f + (1.0f - Steepness) * 5.0f;
+	
+		FHitResult SurfaceAtEyeHeightTraceResult = TraceFromEyeHeight(BaseLength * SteepnessMultiplier);
+		
+		if (AngleInDegrees < MinimumClimbableAngleInDegrees && !bIsCeilingOrFloor && SurfaceAtEyeHeightTraceResult.bBlockingHit)
+		{
+			return true;
+		}
+	}
+
+	
+	//if (!TraceFromEyeHeight(100.0f).bBlockingHit) return false;
 	
 	// const float SurfaceSteepness = FVector::DotProduct(ClimbableSurfaceNormal, UpdatedComponent->GetForwardVector());
 	// const float TraceDistance = 100.0f;
 	// const float SteepnessMultiplier = 1.0f+(1.0f-SurfaceSteepness)*5.0f;	
 	// if (!TraceFromEyeHeight(TraceDistance*SteepnessMultiplier).bBlockingHit) return false;
 
-	return true;
+	return false;
 }
 
 bool UClimbForgeMovementComponent::CanStartClimbingDown()
@@ -219,16 +269,64 @@ bool UClimbForgeMovementComponent::ShouldStopClimbing()
 {
 	if (ClimbableSurfacesHits.IsEmpty()) return true;
 
-	// This is theta = acos(a.b/|a|x|b|) as both the vectors are normalized or unit vector their magnitudes will be 1 thus 
-	// theta = acos(a.b)
-	const float DotResult = FVector::DotProduct(ClimbableSurfaceNormal, FVector::UpVector);
-	const float AngleInDeg = FMath::RadiansToDegrees(FMath::Acos(DotResult));
+	// 1. Get the Surface Normal from the hit result.
+	// This vector is normalized (length of 1) and points outwards from the surface.
+	FVector SurfaceNormal = ClimbableSurfaceNormal;
 
-	if (AngleInDeg <= MinimumClimbableAngleInDegrees)
+	// 2. Define the Player's "Up" Vector.
+	// For most Unreal Engine games, Z-axis is up. FVector::UpVector is (0.0f, 0.0f, 1.0f).
+	// If your character's "up" can rotate (e.g., gravity changes), you would use
+	// GetActorUpVector() from your character's pawn/controller.
+	FVector PlayerUpVector = FVector::UpVector;
+
+	// 3. Calculate the Dot Product between the Surface Normal and the Player's Up Vector.
+	// The dot product tells us how aligned two vectors are:
+	//   -   1.0: Vectors are perfectly aligned (pointing in the same direction).
+	//   -   0.0: Vectors are perpendicular (90 degrees apart).
+	//   -  -1.0: Vectors are perfectly opposite (180 degrees apart).
+	float DotProduct = FVector::DotProduct(SurfaceNormal, PlayerUpVector);
+
+	// 4. Define Thresholds for Non-Climbable Surfaces.
+	// These values determine what is considered a "floor" or a "ceiling".
+	// You will likely need to fine-tune these based on your game's specific needs and level design.
+
+	// Threshold for a non-climbable floor:
+	// If the normal points mostly UP (aligned with PlayerUpVector), it's a floor.
+	// A dot product close to 1.0 indicates a floor.
+	const float FloorDotProductThreshold = 0.8f; // Example: Normal is within ~37 degrees of pure up
+
+	// Threshold for a non-climbable ceiling:
+	// If the normal points mostly DOWN (opposite to PlayerUpVector), it's a ceiling.
+	// A dot product close to -1.0 indicates a ceiling.
+	const float CeilingDotProductThreshold = -0.985f; // Example: Normal is within ~37 degrees of pure down
+
+	// 5. Determine if the surface is climbable.
+	bool bIsClimbableSurface = true; // Assume climbable by default
+
+	if (DotProduct > FloorDotProductThreshold)
 	{
+	    // The surface normal is pointing predominantly upwards. This is a floor.
+	    bIsClimbableSurface = false;
+	    UE_LOG(LogTemp, Log, TEXT("Surface is a non-climbable Floor. DotProduct: %f"), DotProduct);
 		return true;
 	}
-	return false;
+	else if (DotProduct < CeilingDotProductThreshold)
+	{
+	    // The surface normal is pointing predominantly downwards. This is a ceiling.
+	    // This specifically addresses your "ceiling perpendicular to the wall" or "parallel to the surface"
+	    // scenario, as a flat ceiling will have its normal pointing straight down.
+	    bIsClimbableSurface = false;
+	    UE_LOG(LogTemp, Log, TEXT("Surface is a non-climbable Ceiling. DotProduct: %f"), DotProduct);
+		return true;
+	}
+	else
+	{
+	    // The surface normal is mostly horizontal relative to the player's up vector.
+	    // This means it's a wall or a climbable slope.
+	    bIsClimbableSurface = true;
+	    UE_LOG(LogTemp, Log, TEXT("Surface is a Climbable Wall/Slope. DotProduct: %f"), DotProduct);
+		return false;
+	}
 }
 
 void UClimbForgeMovementComponent::StartClimbing()
@@ -308,30 +406,51 @@ bool UClimbForgeMovementComponent::HasReachedTheFloor()
 
 bool UClimbForgeMovementComponent::HasReachedTheLedge()
 {
-	// Get the climbable surface steepness to have a dynamic length trace so it is not too short or not too long for that surface.
-	// Projecting the hit normal onto xy plane as a unit vector to get the direction.
-	// This is used to find the slope of the surface so that we can identify how long the trace should be.
-	const FVector ProjectedNormal = ClimbableSurfaceNormal.GetSafeNormal2D();
-	const float SurfaceSteepness = FVector::DotProduct(ProjectedNormal, ClimbableSurfaceNormal);
-	// steepness closer to one the multiplier is closer to zero so smaller trace
-	const float SteepnessMultiplier = 1.0f + (1.0f - SurfaceSteepness) * 5.0f;
-	const float TraceDistance = SteepnessMultiplier * 100.0f;
+	if (OwnerActorAnimInstance == nullptr) return false;
+	if (OwnerActorAnimInstance->Montage_IsPlaying(ClimbToTopMontage)) return true;
+	
+	const UCapsuleComponent* Capsule = CharacterOwner->GetCapsuleComponent();
+	const float TraceDistance = Capsule->GetUnscaledCapsuleRadius() * 2.5f;
+	const FHitResult LedgeHit = TraceFromEyeHeight(TraceDistance, 20.0f, true);
 
-	const FVector EyeHeightOffset = UpdatedComponent->GetUpVector() * (CharacterOwner->BaseEyeHeight+20.0f);
-	const FVector Start = UpdatedComponent->GetComponentLocation() + EyeHeightOffset;
-	FVector End = Start + (UpdatedComponent->GetForwardVector() * TraceDistance);
-		
-	const FHitResult Hit = LineTraceByChannel(Start, End);
-
-	if (!Hit.bBlockingHit)
+	if (!LedgeHit.bBlockingHit)
 	{
-		End = Hit.TraceEnd;
-		End.Z -= 100.0f;
-		const FHitResult DownHit = LineTraceByChannel(Hit.TraceEnd, End);
+		const FVector WalkableSurfaceStart = LedgeHit.TraceEnd + UpdatedComponent->GetUpVector()*OwnerColliderCapsuleHalfHeight;
+		const FVector WalkableSurfaceEnd = WalkableSurfaceStart + UpdatedComponent->GetUpVector()*-2.0f*OwnerColliderCapsuleHalfHeight;
+		const FHitResult WalkableSurfaceHit = LineTraceByChannel(WalkableSurfaceStart, WalkableSurfaceEnd, true);
 
-		// The second condition so that this returns true only when the actor is in motion. if the actor is
-		// in idle state near the ledge then this should return false.
-		if (DownHit.bBlockingHit && GetUnrotatedClimbingVelocity().Z > 10.0f) return true;
+		if (WalkableSurfaceHit.bBlockingHit && WalkableSurfaceHit.Normal.Z >= GetWalkableFloorZ())
+		{
+			// Do a capsule sweep that mimics tha character and see if it has hits. If it has hits then character cannot climb up the ledge.
+			// This is (CompLoc.X, WalkableSurfaceStart.Y, WalkableSurfaceStart.Z) == right above the character.			
+			const FVector CapsuleStart = FVector(UpdatedComponent->GetComponentLocation().X, WalkableSurfaceStart.Y, WalkableSurfaceStart.Z);
+			FCollisionShape CapsuleCollision = FCollisionShape::MakeCapsule(ClimbCollisionCapsuleRadius, OwnerColliderCapsuleHalfHeight);
+			FHitResult CapsuleHit;
+			const bool bCapsuleHit = GetWorld()->SweepSingleByChannel(CapsuleHit, CapsuleStart, WalkableSurfaceStart, FQuat::Identity,
+				ClimbableSurfaceTraceChannel, CapsuleCollision, ClimbQueryParams);
+			
+			// DrawDebugCapsuleTraceSingle(GetWorld(), CapsuleStart, WalkableSurfaceStart, ClimbCollisionCapsuleRadius, 
+			// OwnerColliderCapsuleHalfHeight, EDrawDebugTrace::ForOneFrame, bCapsuleHit, CapsuleHit, FLinearColor::Red, FLinearColor::Green, 25.0f);
+
+			if (!bCapsuleHit)
+			{
+				ClimbToLedgeTargetLocation = WalkableSurfaceHit.Location;
+				// Check the slope of the ledge. If it is not flat then we have to give the Target location
+				// to the montage via motion warp so that by the end of the animation montage the character is almost at the
+				// target location. If it is not at the exact place then the logic in tick will handle the rest by giving manual velocity and
+				// the system playing the walk animation INSTEAD of teleporting and glitching.
+				const float Dot = FVector::DotProduct(WalkableSurfaceHit.Normal.GetSafeNormal(), UpdatedComponent->GetUpVector());
+				LedgeSurfaceSlopeDegrees = FMath::RadiansToDegrees( FMath::Acos(Dot));
+
+				if (!FMath::IsNearlyZero(LedgeSurfaceSlopeDegrees))
+				{
+					SetMotionWarpTarget("LedgeWarpOffset", ClimbToLedgeTargetLocation);
+					bUsedMotionWarpForLedgeClimb = true;
+				}
+			}
+			
+			return !bCapsuleHit;
+		}
 	} 
 
 	return false;	
@@ -455,7 +574,7 @@ void UClimbForgeMovementComponent::PhysClimbing(const float DeltaTime, int32 Ite
 	}
 
 	// TODO - Process all climbable surfaces info
-	TraceClimbableSurfaces();
+	
 	ProcessClimbableSurfaces();
 	// TODO - Check to see if climbing needs to stop
 	if (ShouldStopClimbing() || HasReachedTheFloor())
@@ -486,6 +605,15 @@ void UClimbForgeMovementComponent::PhysClimbing(const float DeltaTime, int32 Ite
 		SlideAlongSurface(Adjusted, (1.f - Hit.Time), Hit.Normal, Hit, true);
 	}
 
+	if (HasReachedTheLedge())
+	{
+		// Reset the character rotation leaving only the Yaw unaffected. This improves the motion when the character is climbing steep surfaces.
+		const FRotator StandRotation = FRotator(0, UpdatedComponent->GetComponentRotation().Yaw, 0);
+		UpdatedComponent->SetRelativeRotation(StandRotation);
+		//SetMotionWarpTarget("WalkToTargetAfterClimb", WalkToTargetAfterClimb);
+		PlayMontage(ClimbToTopMontage);
+	}
+
 	if(!HasAnimRootMotion() && !CurrentRootMotion.HasOverrideVelocity())
 	{
 		Velocity = (UpdatedComponent->GetComponentLocation() - OldLocation) / DeltaTime;
@@ -493,11 +621,6 @@ void UClimbForgeMovementComponent::PhysClimbing(const float DeltaTime, int32 Ite
 
 	// TODO - Snap movement to climbable surfaces.
 	SnapToClimbableSurface(DeltaTime);
-
-	if (HasReachedTheLedge())
-	{
-		PlayMontage(ClimbToTopMontage);
-	}
 }
 
 void UClimbForgeMovementComponent::ProcessClimbableSurfaces()
@@ -579,7 +702,34 @@ void UClimbForgeMovementComponent::MontageEnded(UAnimMontage* Montage, bool bInt
 	else
 	if (Montage == ClimbToTopMontage)
 	{
-		SetMovementMode(MOVE_Walking);
+		if (bUsedMotionWarpForLedgeClimb)
+		{
+			bUsedMotionWarpForLedgeClimb = false;
+			if (const AClimbForgeCharacter* Owner = Cast<AClimbForgeCharacter>(CharacterOwner))
+			{		
+				Owner->GetMotionWarpingComponent()->RemoveWarpTarget("LedgeWarpOffset");					
+			}
+		}
+
+		// Check if the target location is in front or behind the character's current location.
+		// Proceed with the logic only if the target location is in front.
+		FVector CurrentLocation = UpdatedComponent->GetComponentLocation();
+		const FVector ForwardVector = UpdatedComponent->GetForwardVector();		
+		// Get the direction from character to target location.
+		const FVector ToTarget = (ClimbToLedgeTargetLocation - CurrentLocation).GetSafeNormal();
+		const float DotValue = FVector::DotProduct(ForwardVector, ToTarget);
+
+		// The target is in front.
+		if (DotValue > 0.0f)
+		{
+			// Adjust the character Z here as in the Tick logic we consider only X and Y components
+			// as Ground Speed in anim instance is 2D.
+			const float ZOffset = CurrentLocation.Z - GetActorFeetLocation().Z;
+			CurrentLocation.Z = ZOffset + ClimbToLedgeTargetLocation.Z;
+			UpdatedComponent->SetWorldLocation(CurrentLocation);
+			bMoveToTargetAfterClimb = true;
+		}
+		SetMovementMode(MOVE_Walking);	
 	}
 	else
 	if (Montage == VaultingMontage)
@@ -601,7 +751,7 @@ void UClimbForgeMovementComponent::MontageEnded(UAnimMontage* Montage, bool bInt
 void UClimbForgeMovementComponent::SetMotionWarpTarget(const FName& InWarpTargetName, const FVector& InTargetLocation)
 {
 	if (const AClimbForgeCharacter* Owner = Cast<AClimbForgeCharacter>(CharacterOwner))
-	{
+	{		
 		Owner->GetMotionWarpingComponent()->AddOrUpdateWarpTargetFromLocation(InWarpTargetName, InTargetLocation);
 	}	
 }
@@ -617,25 +767,21 @@ void UClimbForgeMovementComponent::RequestClimbHopping()
 	
 	if (VerticalAxisDotResult > 0.9f)
 	{
-		//Debug::Print(TEXT("Hop up"), FColor::Blue,1);
 		TryPerformClimbHopping(EClimbingDirection::Up);
 	}
 	else
 	if (VerticalAxisDotResult < -0.9f)
 	{
-		//Debug::Print(TEXT("Hop down"), FColor::Green, 1);
 		TryPerformClimbHopping(EClimbingDirection::Down);
 	}
 	else
 	if (HorizontalAxisDotResult > 0.9f)
 	{
-		//Debug::Print(TEXT("Hop Right"), FColor::Blue,1);
 		TryPerformClimbHopping(EClimbingDirection::Right);
 	}
 	else
 	if (HorizontalAxisDotResult < -0.9f)
 	{
-		//Debug::Print(TEXT("Hop Left"), FColor::Green, 1);
 		TryPerformClimbHopping(EClimbingDirection::Left);
 	}
 	else

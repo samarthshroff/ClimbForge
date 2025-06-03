@@ -7,6 +7,7 @@
 
 #include "ClimbForgeCharacter.h"
 #include "ClimbForgeMovementComponent.h"
+#include "DebugHelper.h"
 
 void UCharacterAnimInstance::NativeInitializeAnimation()
 {
@@ -27,6 +28,7 @@ void UCharacterAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	
 	// Get the length of X and Y of velocity, so moving up and down does no affect.
 	GroundSpeed = Velocity.Size2D();
+
 	AirSpeed = Velocity.Z;
 	ClimbVelocity = OwnerMovementComponent->GetUnrotatedClimbingVelocity();
 	
