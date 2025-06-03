@@ -269,24 +269,14 @@ bool UClimbForgeMovementComponent::ShouldStopClimbing()
 {
 	if (ClimbableSurfacesHits.IsEmpty()) return true;
 
-	// 1. Get the Surface Normal from the hit result.
-	// This vector is normalized (length of 1) and points outwards from the surface.
-	FVector SurfaceNormal = ClimbableSurfaceNormal;
-
-	// 2. Define the Player's "Up" Vector.
-	// For most Unreal Engine games, Z-axis is up. FVector::UpVector is (0.0f, 0.0f, 1.0f).
-	// If your character's "up" can rotate (e.g., gravity changes), you would use
-	// GetActorUpVector() from your character's pawn/controller.
-	FVector PlayerUpVector = FVector::UpVector;
-
-	// 3. Calculate the Dot Product between the Surface Normal and the Player's Up Vector.
+	// Calculate the Dot Product between the Surface Normal and the Player's or world's Up Vector (assuming both are same in this case)..
 	// The dot product tells us how aligned two vectors are:
 	//   -   1.0: Vectors are perfectly aligned (pointing in the same direction).
 	//   -   0.0: Vectors are perpendicular (90 degrees apart).
 	//   -  -1.0: Vectors are perfectly opposite (180 degrees apart).
-	float DotProduct = FVector::DotProduct(SurfaceNormal, PlayerUpVector);
+	float DotProduct = FVector::DotProduct(ClimbableSurfaceNormal, FVector::UpVector);
 
-	// 4. Define Thresholds for Non-Climbable Surfaces.
+	// Define Thresholds for Non-Climbable Surfaces.
 	// These values determine what is considered a "floor" or a "ceiling".
 	// You will likely need to fine-tune these based on your game's specific needs and level design.
 
@@ -300,33 +290,23 @@ bool UClimbForgeMovementComponent::ShouldStopClimbing()
 	// A dot product close to -1.0 indicates a ceiling.
 	const float CeilingDotProductThreshold = -0.985f; // Example: Normal is within ~37 degrees of pure down
 
-	// 5. Determine if the surface is climbable.
+	// Determine if the surface is climbable.
 	bool bIsClimbableSurface = true; // Assume climbable by default
 
-	if (DotProduct > FloorDotProductThreshold)
+	if (DotProduct < CeilingDotProductThreshold || DotProduct > FloorDotProductThreshold)
 	{
 	    // The surface normal is pointing predominantly upwards. This is a floor.
 	    bIsClimbableSurface = false;
-	    UE_LOG(LogTemp, Log, TEXT("Surface is a non-climbable Floor. DotProduct: %f"), DotProduct);
-		return true;
-	}
-	else if (DotProduct < CeilingDotProductThreshold)
-	{
-	    // The surface normal is pointing predominantly downwards. This is a ceiling.
-	    // This specifically addresses your "ceiling perpendicular to the wall" or "parallel to the surface"
-	    // scenario, as a flat ceiling will have its normal pointing straight down.
-	    bIsClimbableSurface = false;
-	    UE_LOG(LogTemp, Log, TEXT("Surface is a non-climbable Ceiling. DotProduct: %f"), DotProduct);
-		return true;
+	    //UE_LOG(LogTemp, Log, TEXT("Surface is a non-climbable Floor or Ceiling. DotProduct: %f"), DotProduct);
 	}
 	else
 	{
 	    // The surface normal is mostly horizontal relative to the player's up vector.
 	    // This means it's a wall or a climbable slope.
 	    bIsClimbableSurface = true;
-	    UE_LOG(LogTemp, Log, TEXT("Surface is a Climbable Wall/Slope. DotProduct: %f"), DotProduct);
-		return false;
+	   //UE_LOG(LogTemp, Log, TEXT("Surface is a Climbable Wall/Slope. DotProduct: %f"), DotProduct);
 	}
+	return !bIsClimbableSurface;
 }
 
 void UClimbForgeMovementComponent::StartClimbing()
@@ -411,13 +391,13 @@ bool UClimbForgeMovementComponent::HasReachedTheLedge()
 	
 	const UCapsuleComponent* Capsule = CharacterOwner->GetCapsuleComponent();
 	const float TraceDistance = Capsule->GetUnscaledCapsuleRadius() * 2.5f;
-	const FHitResult LedgeHit = TraceFromEyeHeight(TraceDistance, 20.0f, true);
+	const FHitResult LedgeHit = TraceFromEyeHeight(TraceDistance, 20.0f);
 
 	if (!LedgeHit.bBlockingHit)
 	{
 		const FVector WalkableSurfaceStart = LedgeHit.TraceEnd + UpdatedComponent->GetUpVector()*OwnerColliderCapsuleHalfHeight;
 		const FVector WalkableSurfaceEnd = WalkableSurfaceStart + UpdatedComponent->GetUpVector()*-2.0f*OwnerColliderCapsuleHalfHeight;
-		const FHitResult WalkableSurfaceHit = LineTraceByChannel(WalkableSurfaceStart, WalkableSurfaceEnd, true);
+		const FHitResult WalkableSurfaceHit = LineTraceByChannel(WalkableSurfaceStart, WalkableSurfaceEnd);
 
 		if (WalkableSurfaceHit.bBlockingHit && WalkableSurfaceHit.Normal.Z >= GetWalkableFloorZ())
 		{
@@ -447,9 +427,11 @@ bool UClimbForgeMovementComponent::HasReachedTheLedge()
 					SetMotionWarpTarget("LedgeWarpOffset", ClimbToLedgeTargetLocation);
 					bUsedMotionWarpForLedgeClimb = true;
 				}
+				if (GetUnrotatedClimbingVelocity().Z > 10.0f)
+				{
+					return true;
+				}
 			}
-			
-			return !bCapsuleHit;
 		}
 	} 
 
@@ -661,13 +643,13 @@ FQuat UClimbForgeMovementComponent::GetClimbRotation(const float DeltaTime) cons
 
 inline void UClimbForgeMovementComponent::SnapToClimbableSurface(const float DeltaTime) const
 {
-	// Do not try to snap while a montage (mainly a climb hop montage) is playing.
+	// Do not try to snap while a montage (mainly a climb dash montage) is playing.
 	// this let's the character move to a neighboring wall.
 	if (OwnerActorAnimInstance->IsAnyMontagePlaying() &&
-		(OwnerActorAnimInstance->GetCurrentActiveMontage() == HopClimbLeftMontage ||
-		OwnerActorAnimInstance->GetCurrentActiveMontage() == HopClimbRightMontage ||
-		OwnerActorAnimInstance->GetCurrentActiveMontage() == HopClimbUpMontage ||
-		OwnerActorAnimInstance->GetCurrentActiveMontage() == HopClimbDownMontage)) return;
+		(OwnerActorAnimInstance->GetCurrentActiveMontage() == ClimbDashLeftMontage ||
+		OwnerActorAnimInstance->GetCurrentActiveMontage() == ClimbDashRightMontage ||
+		OwnerActorAnimInstance->GetCurrentActiveMontage() == ClimbDashUpMontage ||
+		OwnerActorAnimInstance->GetCurrentActiveMontage() == ClimbDashDownMontage)) return;
 	
 	const FVector CurrentLocation = UpdatedComponent->GetComponentLocation();
 	const FVector ForwardVector = UpdatedComponent->GetForwardVector();
@@ -678,7 +660,7 @@ inline void UClimbForgeMovementComponent::SnapToClimbableSurface(const float Del
 	const FVector ProjectedVector = (ClimbableSurfaceLocation - CurrentLocation).ProjectOnTo(ForwardVector);
 
 	// The Vector (distance and direction) required for us to snap the actor to the climbable surface.
-	const FVector SnapVector = -1.0f*ClimbableSurfaceNormal*ProjectedVector.Length();
+	const FVector SnapVector = -1.0f*ClimbableSurfaceNormal*(ProjectedVector.Length()-45.0f);
 
 	UpdatedComponent->MoveComponent(SnapVector*DeltaTime*MaxClimbSpeed, UpdatedComponent->GetComponentQuat(), true);	
 }
@@ -737,12 +719,12 @@ void UClimbForgeMovementComponent::MontageEnded(UAnimMontage* Montage, bool bInt
 		SetMovementMode(MOVE_Walking);	
 	}
 	else
-	if (Montage == HopClimbLeftMontage || Montage == HopClimbRightMontage)
+	if (Montage == ClimbDashLeftMontage || Montage == ClimbDashRightMontage)
 	{
 		FVector CurrentLocation = UpdatedComponent->GetComponentLocation();
-		if (CurrentLocation.Z != CharacterLocationBeforeHopMontage.Z)
+		if (CurrentLocation.Z != CharacterLocationBeforeDashMontage.Z)
 		{
-			CurrentLocation.Z = CharacterLocationBeforeHopMontage.Z;
+			CurrentLocation.Z = CharacterLocationBeforeDashMontage.Z;
 			UpdatedComponent->SetWorldLocation(CurrentLocation);
 		}
 	}
@@ -756,7 +738,7 @@ void UClimbForgeMovementComponent::SetMotionWarpTarget(const FName& InWarpTarget
 	}	
 }
 
-void UClimbForgeMovementComponent::RequestClimbHopping()
+void UClimbForgeMovementComponent::RequestClimbDash()
 {	
 	const FVector UnrotatedLastInputVector = UKismetMathLibrary::Quat_UnrotateVector(UpdatedComponent->GetComponentQuat(), GetLastInputVector());
 		
@@ -767,59 +749,59 @@ void UClimbForgeMovementComponent::RequestClimbHopping()
 	
 	if (VerticalAxisDotResult > 0.9f)
 	{
-		TryPerformClimbHopping(EClimbingDirection::Up);
+		TryPerformClimbDash(EClimbingDirection::Up);
 	}
 	else
 	if (VerticalAxisDotResult < -0.9f)
 	{
-		TryPerformClimbHopping(EClimbingDirection::Down);
+		TryPerformClimbDash(EClimbingDirection::Down);
 	}
 	else
 	if (HorizontalAxisDotResult > 0.9f)
 	{
-		TryPerformClimbHopping(EClimbingDirection::Right);
+		TryPerformClimbDash(EClimbingDirection::Right);
 	}
 	else
 	if (HorizontalAxisDotResult < -0.9f)
 	{
-		TryPerformClimbHopping(EClimbingDirection::Left);
+		TryPerformClimbDash(EClimbingDirection::Left);
 	}
 	else
 	{
-		Debug::Print(TEXT("Invalid direction for hop"), FColor::Red, 1);		
+		Debug::Print(TEXT("Invalid direction for dash"), FColor::Red, 1);		
 	}
 }
 
-void UClimbForgeMovementComponent::TryPerformClimbHopping(const EClimbingDirection ClimbingDirection)
+void UClimbForgeMovementComponent::TryPerformClimbDash(const EClimbingDirection ClimbingDirection)
 {
-	FVector HopHitPoint = FVector::ZeroVector;
+	FVector DashHitPoint = FVector::ZeroVector;
 	
-	if (CanStartClimbHopping(ClimbingDirection, HopHitPoint))
+	if (CanStartClimbDash(ClimbingDirection, DashHitPoint))
 	{
-		SetMotionWarpTarget(FName("HopHitPoint"), HopHitPoint);
+		SetMotionWarpTarget(FName("HopHitPoint"), DashHitPoint);
 		switch (ClimbingDirection)
 		{
 			case EClimbingDirection::Up:
 			{
-				PlayMontage(HopClimbUpMontage);
+				PlayMontage(ClimbDashUpMontage);
 			}
 			break;
 
 			case EClimbingDirection::Down:
 			{
-				PlayMontage(HopClimbDownMontage);
+				PlayMontage(ClimbDashDownMontage);
 			}
 			break;
 
 			case EClimbingDirection::Left:
 			{
-				PlayMontage(HopClimbLeftMontage);
+				PlayMontage(ClimbDashLeftMontage);
 			}
 			break;
 
 			case EClimbingDirection::Right:
 			{				
-				PlayMontage(HopClimbRightMontage);
+				PlayMontage(ClimbDashRightMontage);
 			}
 			break;
 		
@@ -828,26 +810,26 @@ void UClimbForgeMovementComponent::TryPerformClimbHopping(const EClimbingDirecti
 	}
 }
 
-bool UClimbForgeMovementComponent::CanStartClimbHopping(const EClimbingDirection ClimbingDirection, FVector& OutHopHitPoint)
+bool UClimbForgeMovementComponent::CanStartClimbDash(const EClimbingDirection ClimbingDirection, FVector& OutDashHitPoint)
 {
-	FHitResult HopHit;
+	FHitResult DashHit;
 	FHitResult EdgeHit;
 		
 	switch (ClimbingDirection)
 	{
 		case EClimbingDirection::Up:
 		{
-			HopHit = TraceFromEyeHeight(ClimbHoppingTraceLength, ClimbHoppingEyeHeightTraceOffset);
-			EdgeHit = TraceFromEyeHeight(ClimbHoppingTraceLength, ClimbHoppingEdgeTraceOffset);
+			DashHit = TraceFromEyeHeight(ClimbDashTraceLength, ClimbDashEyeHeightTraceOffset);
+			EdgeHit = TraceFromEyeHeight(ClimbDashTraceLength, ClimbDashEdgeTraceOffset);
 		}
 		break;
 
 		case EClimbingDirection::Down:
 		{
-			HopHit = TraceFromEyeHeight(ClimbHoppingTraceLength, -2.0f*ClimbHoppingEdgeTraceOffset);
-			if (HopHit.bBlockingHit)
+			DashHit = TraceFromEyeHeight(ClimbDashTraceLength, -2.0f*ClimbDashEdgeTraceOffset);
+			if (DashHit.bBlockingHit)
 			{
-				OutHopHitPoint = HopHit.Location;
+				OutDashHitPoint = DashHit.Location;
 				return true;
 			}			
 		}
@@ -855,20 +837,20 @@ bool UClimbForgeMovementComponent::CanStartClimbHopping(const EClimbingDirection
 
 		case EClimbingDirection::Left:
 		{		
-			HopHit = TraceFromEyeHeight(ClimbHoppingTraceLength, ClimbHoppingEyeHeightTraceOffset);
-			const FVector EyeLevelVector = UpdatedComponent->GetComponentLocation() + (UpdatedComponent->GetUpVector() * CharacterOwner->BaseEyeHeight + ClimbHoppingEyeHeightTraceOffset);
-			const FVector Start = EyeLevelVector + (-1.0f*UpdatedComponent->GetRightVector()*ClimbHoppingEdgeTraceOffset);				
-			const FVector End = Start + (UpdatedComponent->GetForwardVector() * ClimbHoppingTraceLength);
+			DashHit = TraceFromEyeHeight(ClimbDashTraceLength, ClimbDashEyeHeightTraceOffset);
+			const FVector EyeLevelVector = UpdatedComponent->GetComponentLocation() + (UpdatedComponent->GetUpVector() * CharacterOwner->BaseEyeHeight + ClimbDashEyeHeightTraceOffset);
+			const FVector Start = EyeLevelVector + (-1.0f*UpdatedComponent->GetRightVector()*ClimbDashEdgeTraceOffset);				
+			const FVector End = Start + (UpdatedComponent->GetForwardVector() * ClimbDashTraceLength);
 			EdgeHit = LineTraceByChannel(Start, End);
 		}
 		break;
 
 		case EClimbingDirection::Right:
 		{
-			HopHit = TraceFromEyeHeight(ClimbHoppingTraceLength, ClimbHoppingEyeHeightTraceOffset);
-			const FVector EyeLevelVector = UpdatedComponent->GetComponentLocation() + (UpdatedComponent->GetUpVector() * CharacterOwner->BaseEyeHeight + ClimbHoppingEyeHeightTraceOffset);
-			const FVector Start = EyeLevelVector + (UpdatedComponent->GetRightVector()*ClimbHoppingEdgeTraceOffset);				
-			const FVector End = Start + (UpdatedComponent->GetForwardVector() * ClimbHoppingTraceLength);
+			DashHit = TraceFromEyeHeight(ClimbDashTraceLength, ClimbDashEyeHeightTraceOffset);
+			const FVector EyeLevelVector = UpdatedComponent->GetComponentLocation() + (UpdatedComponent->GetUpVector() * CharacterOwner->BaseEyeHeight + ClimbDashEyeHeightTraceOffset);
+			const FVector Start = EyeLevelVector + (UpdatedComponent->GetRightVector()*ClimbDashEdgeTraceOffset);				
+			const FVector End = Start + (UpdatedComponent->GetForwardVector() * ClimbDashTraceLength);
 			EdgeHit = LineTraceByChannel(Start, End);
 		}
 		break;
@@ -876,18 +858,18 @@ bool UClimbForgeMovementComponent::CanStartClimbHopping(const EClimbingDirection
 		default: ;
 	}
 
-	if (HopHit.bBlockingHit && EdgeHit.bBlockingHit)
+	if (DashHit.bBlockingHit && EdgeHit.bBlockingHit)
 	{
 		if (ClimbingDirection == EClimbingDirection::Left || ClimbingDirection == EClimbingDirection::Right)
 		{
-			CharacterLocationBeforeHopMontage = UpdatedComponent->GetComponentLocation();
-			OutHopHitPoint = EdgeHit.Location;
+			CharacterLocationBeforeDashMontage = UpdatedComponent->GetComponentLocation();
+			OutDashHitPoint = EdgeHit.Location;
 			// Root motion is at the bottom of character and the hit point is at the top of the character capsule.
-			OutHopHitPoint.Z = UpdatedComponent->GetComponentLocation().Z - (2.0f*CharacterOwner->GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight());
+			OutDashHitPoint.Z = UpdatedComponent->GetComponentLocation().Z - (2.0f*CharacterOwner->GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight());
 		}
 		else
 		{
-			OutHopHitPoint = HopHit.Location;	
+			OutDashHitPoint = DashHit.Location;	
 		}		
 		
 		return true;

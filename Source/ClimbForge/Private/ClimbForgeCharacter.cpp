@@ -170,7 +170,7 @@ void AClimbForgeCharacter::ClimbStarted(const FInputActionValue& Value)
 void AClimbForgeCharacter::ClimbHopStarted(const FInputActionValue& Value)
 {
 	if (ClimbForgeMovementComponent == nullptr) return;
-	ClimbForgeMovementComponent->RequestClimbHopping();
+	ClimbForgeMovementComponent->RequestClimbDash();
 }
 
 void AClimbForgeCharacter::OnEnterClimbingMode()

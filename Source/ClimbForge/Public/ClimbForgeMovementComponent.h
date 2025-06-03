@@ -34,7 +34,7 @@ private:
 	UPROPERTY()
 	TObjectPtr<UAnimInstance> OwnerActorAnimInstance;
 
-	FVector CharacterLocationBeforeHopMontage;
+	FVector CharacterLocationBeforeDashMontage;
 
 	bool bMoveToTargetAfterClimb = false;
 	FVector ClimbToLedgeTargetLocation;
@@ -75,13 +75,13 @@ private:
 	float ClimbDownLedgeTraceOffset = 50.f;
 
 	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Character Movement: Climb",meta = (AllowPrivateAccess = "true"))
-	float ClimbHoppingTraceLength = 100.0f;
+	float ClimbDashTraceLength = 100.0f;
 
 	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Character Movement: Climb",meta = (AllowPrivateAccess = "true"))
-	float ClimbHoppingEyeHeightTraceOffset = -20.0f;
+	float ClimbDashEyeHeightTraceOffset = -20.0f;
 
 	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Character Movement: Climb",meta = (AllowPrivateAccess = "true"))
-	float ClimbHoppingEdgeTraceOffset = 150.0f;
+	float ClimbDashEdgeTraceOffset = 150.0f;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
 	TObjectPtr<UAnimMontage> IdleToClimbMontage;
@@ -93,16 +93,16 @@ private:
 	TObjectPtr<UAnimMontage> ClimbDownFromLegdeMontage;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
-	TObjectPtr<UAnimMontage> HopClimbUpMontage;
+	TObjectPtr<UAnimMontage> ClimbDashUpMontage;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
-	TObjectPtr<UAnimMontage> HopClimbDownMontage;
+	TObjectPtr<UAnimMontage> ClimbDashDownMontage;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
-	TObjectPtr<UAnimMontage> HopClimbLeftMontage;
+	TObjectPtr<UAnimMontage> ClimbDashLeftMontage;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
-	TObjectPtr<UAnimMontage> HopClimbRightMontage;
+	TObjectPtr<UAnimMontage> ClimbDashRightMontage;
 
 	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Character Movement: Vault", meta = (AllowPrivateAccess = "true"))
 	float MinimumVaultTraceDistance = 50.f;
@@ -118,7 +118,7 @@ private:
 public:
 #pragma region ClimbCore
 	void ToggleClimbing(const bool bEnableClimb);
-	void RequestClimbHopping();
+	void RequestClimbDash();
 	
 	bool IsClimbing() const;
 	FORCEINLINE FVector GetClimbableSurfaceNormal() const {return ClimbableSurfaceNormal;}
@@ -171,8 +171,8 @@ private:
 	void StartClimbing();
 	void StopClimbing();
 
-	bool CanStartClimbHopping(const EClimbingDirection ClimbingDirection, FVector& OutHopHitPoint);
-	void TryPerformClimbHopping(const EClimbingDirection ClimbingDirection);
+	bool CanStartClimbDash(const EClimbingDirection ClimbingDirection, FVector& OutDashHitPoint);
+	void TryPerformClimbDash(const EClimbingDirection ClimbingDirection);
 	
 	void PhysClimbing(float DeltaTime, int32 Iterations);
 
