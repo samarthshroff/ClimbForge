@@ -70,7 +70,8 @@ This project is licensed under the [Creative Commons Attribution-NonCommercial-N
   You may not modify, remix, or create derivative works based on this project. Pull requests and contributions are not accepted.
 
 - **Commercial Use:**  
-  Commercial use of this project, in whole or in part, is not permitted without explicit written permission from the author. If you wish to use this project commercially, please contact [samarthshroff](mailto:samarthshroff@gmail.com) to discuss licensing and attribution requirements.
+  Commercial use of this project, in whole or in part, is not permitted without explicit written permission from the author. If you wish to use this project 
+  commercially, please contact [samarthshroff](mailto:samarth.shroff@gmail.com) to discuss licensing and attribution requirements.
 
 ### Unreal Engine Content Notice
 This project may include content (code, binaries, or assets) provided by Epic Games, Inc. (“Epic”) under the Unreal Engine End User License Agreement (EULA).  
@@ -85,4 +86,4 @@ Such content is subject to the [Unreal Engine EULA](https://www.unrealengine.com
 | Commercial         | ❌       | Contact author for permission and credit requirements                 |
 | Modification       | ❌       | No derivatives; do not submit pull requests or modified versions      |
 
-For more details, see the [LICENSE](LICENSE) file in this repository.
+For more details, see the [LICENSE](LICENSE.md) file in this repository.
