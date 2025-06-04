@@ -170,6 +170,7 @@ void AClimbForgeCharacter::ClimbStarted(const FInputActionValue& Value)
 void AClimbForgeCharacter::ClimbHopStarted(const FInputActionValue& Value)
 {
 	if (ClimbForgeMovementComponent == nullptr) return;
+	Debug::Print(TEXT("Climb Dash Requested"), FColor::Red, 1);
 	ClimbForgeMovementComponent->RequestClimbDash();
 }
 
