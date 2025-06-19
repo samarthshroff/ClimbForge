@@ -327,6 +327,11 @@ bool UClimbForgeMovementComponent::IsClimbing() const
 	return MovementMode == MOVE_Custom && CustomMovementMode == MOVE_Climbing;
 }
 
+bool UClimbForgeMovementComponent::IsClimbDashing() const
+{
+	return IsClimbing() && bIsClimbDashing;
+}
+
 FVector UClimbForgeMovementComponent::GetUnrotatedClimbingVelocity() const
 {
 	return UKismetMathLibrary::Quat_UnrotateVector(UpdatedComponent->GetComponentQuat(), Velocity);
@@ -760,12 +765,18 @@ void UClimbForgeMovementComponent::MontageEnded(UAnimMontage* Montage, bool bInt
 	else
 	if (Montage == ClimbDashLeftMontage || Montage == ClimbDashRightMontage)
 	{
+		bIsClimbDashing = false;
 		FVector CurrentLocation = UpdatedComponent->GetComponentLocation();
 		if (CurrentLocation.Z != CharacterLocationBeforeDashMontage.Z)
 		{
 			CurrentLocation.Z = CharacterLocationBeforeDashMontage.Z;
 			UpdatedComponent->SetWorldLocation(CurrentLocation);
 		}
+	}
+	else
+	if (Montage == ClimbDashUpMontage || Montage == ClimbDashDownMontage)
+	{
+		bIsClimbDashing = false;
 	}
 }
 
@@ -853,44 +864,72 @@ bool UClimbForgeMovementComponent::CanStartClimbDash(const EClimbingDirection Cl
 {
 	FHitResult DashHit;
 	FHitResult EdgeHit;
-		
+
+	// The montages played here are root motion based so motion warp will set the root bone to the
+	// given impact location. This, we need this offset to align the character correctly during and after montage play.
+	FVector RootBoneLocation = GetCharacterOwner()->GetMesh()->GetBoneLocation(TEXT("root"));
+	const float ZOffset = UpdatedComponent->GetComponentLocation().Z - RootBoneLocation.Z;	
+	
 	switch (ClimbingDirection)
 	{
 		case EClimbingDirection::Up:
 		{
-			DashHit = TraceFromEyeHeight(ClimbDashTraceLength, ClimbDashEyeHeightTraceOffset);
+			DashHit = TraceFromEyeHeight(ClimbDashTraceLength, ClimbDashDistance);
 			EdgeHit = TraceFromEyeHeight(ClimbDashTraceLength, ClimbDashEdgeTraceOffset);
 		}
 		break;
 
 		case EClimbingDirection::Down:
 		{
-			DashHit = TraceFromEyeHeight(ClimbDashTraceLength, -2.0f*ClimbDashEdgeTraceOffset);
+			// The reference point here is the hip of the character (where the capsule ends) and not the eye
+			const float Offset = CharacterOwner->GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight()+ClimbDashDistance;
+			const FVector Start = UpdatedComponent->GetComponentLocation() + ((-1.0f*UpdatedComponent->GetUpVector())*Offset);
+			const FVector End = Start + (UpdatedComponent->GetForwardVector() * ClimbDashTraceLength);
+			DashHit = LineTraceByChannel(Start, End);
+			
 			if (DashHit.bBlockingHit)
 			{
-				OutDashHitPoint = DashHit.Location;
+				OutDashHitPoint = DashHit.ImpactPoint;
+				// Root motion is at the bottom of character and the hit point is at the top of the character capsule.
+				// SO offsetting the Impact point Z with the difference between character Z and Root Z so
+				// motion warp sets teh root further down than the impact point and the character chest lies at the impact point.
+				OutDashHitPoint.Z -= ZOffset;
 				return true;
 			}			
 		}
 		break;
 
 		case EClimbingDirection::Left:
-		{		
-			DashHit = TraceFromEyeHeight(ClimbDashTraceLength, ClimbDashEyeHeightTraceOffset);
-			const FVector EyeLevelVector = UpdatedComponent->GetComponentLocation() + (UpdatedComponent->GetUpVector() * CharacterOwner->BaseEyeHeight + ClimbDashEyeHeightTraceOffset);
-			const FVector Start = EyeLevelVector + (-1.0f*UpdatedComponent->GetRightVector()*ClimbDashEdgeTraceOffset);				
-			const FVector End = Start + (UpdatedComponent->GetForwardVector() * ClimbDashTraceLength);
-			EdgeHit = LineTraceByChannel(Start, End);
+		{
+			FVector LeftHandBoneLocation = GetCharacterOwner()->GetMesh()->GetBoneLocation(TEXT("hand_l"));				
+			FVector EyeLevelVector = UpdatedComponent->GetComponentLocation() + (UpdatedComponent->GetUpVector() * (CharacterOwner->BaseEyeHeight + ClimbDashEyeHeightTraceOffset));
+			EyeLevelVector.Y = LeftHandBoneLocation.Y;
+			
+			const FVector DashHitStart = EyeLevelVector + (-1.0f*UpdatedComponent->GetRightVector()*ClimbDashDistance);				
+			const FVector DashHitEnd = DashHitStart + (UpdatedComponent->GetForwardVector() * ClimbDashTraceLength);
+				
+			DashHit = LineTraceByChannel(DashHitStart, DashHitEnd);
+				
+			const FVector EdgeHitStart = EyeLevelVector + (-1.0f*UpdatedComponent->GetRightVector()*ClimbDashEdgeTraceOffset);				
+			const FVector EdgeHitEnd = EdgeHitStart + (UpdatedComponent->GetForwardVector() * ClimbDashTraceLength);
+			EdgeHit = LineTraceByChannel(EdgeHitStart, EdgeHitEnd);
 		}
 		break;
 
 		case EClimbingDirection::Right:
 		{
-			DashHit = TraceFromEyeHeight(ClimbDashTraceLength, ClimbDashEyeHeightTraceOffset);
-			const FVector EyeLevelVector = UpdatedComponent->GetComponentLocation() + (UpdatedComponent->GetUpVector() * CharacterOwner->BaseEyeHeight + ClimbDashEyeHeightTraceOffset);
-			const FVector Start = EyeLevelVector + (UpdatedComponent->GetRightVector()*ClimbDashEdgeTraceOffset);				
-			const FVector End = Start + (UpdatedComponent->GetForwardVector() * ClimbDashTraceLength);
-			EdgeHit = LineTraceByChannel(Start, End);
+			FVector RightHandBoneLocation = GetCharacterOwner()->GetMesh()->GetBoneLocation(TEXT("hand_r"));	
+			FVector EyeLevelVector = UpdatedComponent->GetComponentLocation() + (UpdatedComponent->GetUpVector() * (CharacterOwner->BaseEyeHeight + ClimbDashEyeHeightTraceOffset));
+			EyeLevelVector.Y = RightHandBoneLocation.Y;
+
+			const FVector DashHitStart = EyeLevelVector + (UpdatedComponent->GetRightVector()*ClimbDashDistance);
+			const FVector DashHitEnd = DashHitStart + (UpdatedComponent->GetForwardVector() * ClimbDashTraceLength);
+				
+			DashHit = LineTraceByChannel(DashHitStart, DashHitEnd);
+
+			const FVector EdgeHitStart = EyeLevelVector + (UpdatedComponent->GetRightVector()*ClimbDashEdgeTraceOffset);				
+			const FVector EdgeHitEnd = EdgeHitStart + (UpdatedComponent->GetForwardVector() * ClimbDashTraceLength);
+			EdgeHit = LineTraceByChannel(EdgeHitStart, EdgeHitEnd);
 		}
 		break;
 		
@@ -902,13 +941,18 @@ bool UClimbForgeMovementComponent::CanStartClimbDash(const EClimbingDirection Cl
 		if (ClimbingDirection == EClimbingDirection::Left || ClimbingDirection == EClimbingDirection::Right)
 		{
 			CharacterLocationBeforeDashMontage = UpdatedComponent->GetComponentLocation();
-			OutDashHitPoint = EdgeHit.Location;
+			OutDashHitPoint = DashHit.Location;
 			// Root motion is at the bottom of character and the hit point is at the top of the character capsule.
-			OutDashHitPoint.Z = UpdatedComponent->GetComponentLocation().Z - (2.0f*CharacterOwner->GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight());
+			// So mapping the hit point Z to root motion Z
+			OutDashHitPoint.Z = RootBoneLocation.Z;
 		}
 		else
 		{
-			OutDashHitPoint = DashHit.Location;	
+			OutDashHitPoint = DashHit.ImpactPoint;
+			// Root motion is at the bottom of character and the hit point is at the top of the character capsule.
+			// So offsetting the Impact point Z with the difference between character Z and Root Z so
+			// motion warp sets the root further down than the impact point and the character chest lies at the impact point.
+			OutDashHitPoint.Z -= ZOffset; 
 		}		
 		
 		return true;

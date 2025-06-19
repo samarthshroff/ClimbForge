@@ -93,7 +93,7 @@ private:
 
 	/** Called for climb input */
 	void ClimbStarted(const FInputActionValue& Value);
-	void ClimbHopStarted(const FInputActionValue& Value);
+	void ClimbDashStarted(const FInputActionValue& Value);
 
 	void HandleClimbingMovement(const FInputActionValue& Value);
 	void HandleGroundMovement(const FInputActionValue& Value);

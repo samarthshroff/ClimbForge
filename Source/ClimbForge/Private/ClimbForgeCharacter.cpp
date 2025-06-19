@@ -101,7 +101,7 @@ void AClimbForgeCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInpu
 		// Climb Action
 		EnhancedInputComponent->BindAction(ClimbAction, ETriggerEvent::Started, this, &AClimbForgeCharacter::ClimbStarted);
 		EnhancedInputComponent->BindAction(ClimbMoveAction, ETriggerEvent::Triggered, this, &AClimbForgeCharacter::HandleClimbingMovement);
-		EnhancedInputComponent->BindAction(ClimbHopAction, ETriggerEvent::Started, this, &AClimbForgeCharacter::ClimbHopStarted);
+		EnhancedInputComponent->BindAction(ClimbHopAction, ETriggerEvent::Started, this, &AClimbForgeCharacter::ClimbDashStarted);
 	}
 	else
 	{
@@ -134,6 +134,8 @@ void AClimbForgeCharacter::HandleGroundMovement(const FInputActionValue& Value)
 
 void AClimbForgeCharacter::HandleClimbingMovement(const FInputActionValue& Value)
 {
+	if (ClimbForgeMovementComponent == nullptr) return;
+	if (ClimbForgeMovementComponent->IsClimbDashing()) return;
 	// input is a Vector2D
 	const FVector2D MovementVector = Value.Get<FVector2D>();
 	
@@ -167,9 +169,10 @@ void AClimbForgeCharacter::ClimbStarted(const FInputActionValue& Value)
 	ClimbForgeMovementComponent->ToggleClimbing(!ClimbForgeMovementComponent->IsClimbing());
 }
 
-void AClimbForgeCharacter::ClimbHopStarted(const FInputActionValue& Value)
+void AClimbForgeCharacter::ClimbDashStarted(const FInputActionValue& Value)
 {
 	if (ClimbForgeMovementComponent == nullptr) return;
+	if (ClimbForgeMovementComponent->IsClimbDashing()) return;
 	Debug::Print(TEXT("Climb Dash Requested"), FColor::Red, 1);
 	ClimbForgeMovementComponent->RequestClimbDash();
 }

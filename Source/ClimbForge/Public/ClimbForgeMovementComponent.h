@@ -19,6 +19,7 @@ public:
 	FOnEnterClimbingModeDelegate OnEnterClimbingMode;
 	FOnExitClimbingModeDelegate OnExitClimbingMode;
 	
+	
 private:
 #pragma region ClimbCoreVariables
 	TArray<FHitResult> ClimbableSurfacesHits;
@@ -40,6 +41,7 @@ private:
 	FVector ClimbToLedgeTargetLocation;
 	float LedgeSurfaceSlopeDegrees;
 	bool bUsedMotionWarpForLedgeClimb = false;
+	bool bIsClimbDashing = false;
 	
 #pragma endregion
 	
@@ -74,14 +76,23 @@ private:
 	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Character Movement: Climb",meta = (AllowPrivateAccess = "true"))
 	float ClimbDownLedgeTraceOffset = 50.f;
 
+	// The length of the trace
 	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Character Movement: Climb",meta = (AllowPrivateAccess = "true"))
 	float ClimbDashTraceLength = 100.0f;
-
+	
 	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Character Movement: Climb",meta = (AllowPrivateAccess = "true"))
 	float ClimbDashEyeHeightTraceOffset = -20.0f;
 
 	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Character Movement: Climb",meta = (AllowPrivateAccess = "true"))
-	float ClimbDashEdgeTraceOffset = 150.0f;
+	float ClimbDashEdgeTraceOffset = 200.0f;
+
+	// A ratio (0–1) that determines what percent of the edge trace offset to use to actually travel during dash. 
+	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Character Movement: Climb",meta = (ClampMin = "0.0", ClampMax = "1.0", AllowPrivateAccess = "true"))
+	float ClimbDashDistanceRatio = 0.75f;
+	
+	// How far will the character travel when does a climb dash.
+	UPROPERTY(VisibleDefaultsOnly,BlueprintReadOnly,Category = "Character Movement: Climb",meta = (AllowPrivateAccess = "true"))
+	float ClimbDashDistance = ClimbDashEdgeTraceOffset * ClimbDashDistanceRatio;
 
 	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Character Movement: Climb",meta = (AllowPrivateAccess = "true"))
 	float ClimbSnapSpeed = 5.0f;
@@ -124,6 +135,7 @@ public:
 	void RequestClimbDash();
 	
 	bool IsClimbing() const;
+	bool IsClimbDashing() const;
 	FORCEINLINE FVector GetClimbableSurfaceNormal() const {return ClimbableSurfaceNormal;}
 
 	// When the actor is climbing the velocity is rotated along with the actor's rotation (see - GetClimbRotation).
