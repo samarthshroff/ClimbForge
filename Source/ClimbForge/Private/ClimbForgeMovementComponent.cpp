@@ -36,6 +36,7 @@ void UClimbForgeMovementComponent::TickComponent(float DeltaTime, enum ELevelTic
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 	TraceClimbableSurfaces();
 
+	// Walk a few steps after climbing the ledge so that character does not have a leg in air after climbing on top.
 	if (bMoveToTargetAfterClimb)
 	{
 		const FVector ToTarget = ClimbToLedgeTargetLocation - UpdatedComponent->GetComponentLocation();
@@ -174,11 +175,13 @@ void UClimbForgeMovementComponent::ToggleClimbing(const bool bEnableClimb)
 	{
 		if (CanStartClimbing())
 		{
+			StartClimbing();
 			PlayMontage(IdleToClimbMontage);
 		}
 		else
 		if (CanStartClimbingDown())
 		{
+			//StartClimbing();
 			PlayMontage(ClimbDownFromLegdeMontage);
 		}
 		else
@@ -578,6 +581,7 @@ void UClimbForgeMovementComponent::PhysClimbing(const float DeltaTime, int32 Ite
 
 	ApplyRootMotionToVelocity(DeltaTime);
 
+	// Move along the climbable surface - starts
 	const FVector OldLocation = UpdatedComponent->GetComponentLocation();
 	const FVector Adjusted = Velocity * DeltaTime;
 	FHitResult Hit(1.f);
@@ -590,6 +594,7 @@ void UClimbForgeMovementComponent::PhysClimbing(const float DeltaTime, int32 Ite
 		HandleImpact(Hit, DeltaTime, Adjusted);
 		SlideAlongSurface(Adjusted, (1.f - Hit.Time), Hit.Normal, Hit, true);
 	}
+	// Move along the climbable surface - ends
 
 	if (HasReachedTheLedge())
 	{
@@ -624,21 +629,23 @@ void UClimbForgeMovementComponent::ProcessClimbableSurfaces()
 	for (FHitResult SurfaceHits : ClimbableSurfacesHits)
 	{
 		// TODO - come back to this later.
-		// // Sometimes with overlapping surfaces we can get slightly incorrect normals.
-		// // The sweep is already present in the collision done by overlap thus making the normal(s) point towards the center.
-		// //  This makes the character rotate incorrectly while climbing.
-		// // So doing a sphere sweep to each hit we have from the character location would give us correct straight normals.
-		// const FVector DirectionVector = (SurfaceHits.ImpactPoint - SweepStart).GetSafeNormal();
-		// const FVector End = SweepStart + DirectionVector * 100.0f;// some arbitrary length.
-		//
-		// FHitResult SphereHit;
-		// const bool bHit = GetWorld()->SweepSingleByChannel(SphereHit, SweepStart, End, FQuat::Identity, ClimbableSurfaceTraceChannel,
-		// 	SphereShape, ClimbQueryParams);
-		//
-		// //DrawDebugSphereTraceSingle(GetWorld(), SweepStart, End, 5.0f,EDrawDebugTrace::ForOneFrame, bHit, SphereHit, FColor::Blue, FColor::Red, 25.0f);
-				
-		ClimbableSurfaceLocation += SurfaceHits.ImpactPoint;
-		ClimbableSurfaceNormal += SurfaceHits.ImpactNormal;
+		// Sometimes with overlapping surfaces we can get slightly incorrect normals.
+		// The sweep is already present in the collision done by overlap thus making the normal(s) point towards the center.
+		//  This makes the character rotate incorrectly while climbing.
+		// So doing a sphere sweep to each hit we have from the character location would give us correct straight normals.
+		const FVector DirectionVector = (SurfaceHits.ImpactPoint - SweepStart).GetSafeNormal();
+		const FVector End = SweepStart + DirectionVector * 150.0f;// some arbitrary length.
+		
+		FHitResult SphereHit;
+		const bool bHit = GetWorld()->SweepSingleByChannel(SphereHit, SweepStart, End, FQuat::Identity, ClimbableSurfaceTraceChannel,
+			SphereShape, ClimbQueryParams);
+		
+		//DrawDebugSphereTraceSingle(GetWorld(), SweepStart, End, 5.0f,EDrawDebugTrace::ForOneFrame, bHit, SphereHit, FColor::Blue, FColor::Red, 25.0f);
+		ClimbableSurfaceLocation += SphereHit.Location;
+		ClimbableSurfaceNormal += SphereHit.Normal;
+		
+		// ClimbableSurfaceLocation += SurfaceHits.ImpactPoint;
+		// ClimbableSurfaceNormal += SurfaceHits.ImpactNormal;
 	}
 
 	ClimbableSurfaceLocation /= ClimbableSurfacesHits.Num();
@@ -666,13 +673,13 @@ FQuat UClimbForgeMovementComponent::GetClimbRotation(const float DeltaTime) cons
 
 inline void UClimbForgeMovementComponent::SnapToClimbableSurface(const float DeltaTime) const
 {
-	// Do not try to snap while a montage (mainly a climb dash montage) is playing.
-	// this let's the character move to a neighboring wall.
-	if (OwnerActorAnimInstance->IsAnyMontagePlaying() &&
-		(OwnerActorAnimInstance->GetCurrentActiveMontage() == ClimbDashLeftMontage ||
-		OwnerActorAnimInstance->GetCurrentActiveMontage() == ClimbDashRightMontage ||
-		OwnerActorAnimInstance->GetCurrentActiveMontage() == ClimbDashUpMontage ||
-		OwnerActorAnimInstance->GetCurrentActiveMontage() == ClimbDashDownMontage)) return;
+	// // Do not try to snap while a montage (mainly a climb dash montage) is playing.
+	// // this let's the character move to a neighboring wall.
+	// if (OwnerActorAnimInstance->IsAnyMontagePlaying() &&
+	// 	(OwnerActorAnimInstance->GetCurrentActiveMontage() == ClimbDashLeftMontage ||
+	// 	OwnerActorAnimInstance->GetCurrentActiveMontage() == ClimbDashRightMontage ||
+	// 	OwnerActorAnimInstance->GetCurrentActiveMontage() == ClimbDashUpMontage ||
+	// 	OwnerActorAnimInstance->GetCurrentActiveMontage() == ClimbDashDownMontage)) return;
 	
 	const FVector CurrentLocation = UpdatedComponent->GetComponentLocation();
 	const FVector ForwardVector = UpdatedComponent->GetForwardVector();
@@ -683,9 +690,11 @@ inline void UClimbForgeMovementComponent::SnapToClimbableSurface(const float Del
 	const FVector ProjectedVector = (ClimbableSurfaceLocation - CurrentLocation).ProjectOnTo(ForwardVector);
 
 	// The Vector (distance and direction) required for us to snap the actor to the climbable surface.
-	const FVector SnapVector = -1.0f*ClimbableSurfaceNormal*ProjectedVector.Length();
+	const FVector SnapVector = -1.0f*ClimbableSurfaceNormal*(ProjectedVector.Length()*45.0f);
 
-	UpdatedComponent->MoveComponent(SnapVector*DeltaTime*MaxClimbSpeed, UpdatedComponent->GetComponentQuat(), true);	
+	// How fast to snap the actor to the climbable surface.
+	const float SnapSpeed = ClimbSnapSpeed * ((Velocity.Length() / MaxClimbSpeed) + 1);
+	UpdatedComponent->MoveComponent(SnapVector*DeltaTime*SnapSpeed, UpdatedComponent->GetComponentQuat(), true);	
 	
 	// // The Vector (distance and direction) required for us to snap the actor to the climbable surface.
 	// const FVector SnapVector = -1.0f*ClimbableSurfaceNormal*(ProjectedVector.Length()-45.0f);
