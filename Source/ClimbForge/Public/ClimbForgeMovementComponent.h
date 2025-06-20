@@ -18,7 +18,7 @@ class CLIMBFORGE_API UClimbForgeMovementComponent : public UCharacterMovementCom
 public:
 	FOnEnterClimbingModeDelegate OnEnterClimbingMode;
 	FOnExitClimbingModeDelegate OnExitClimbingMode;
-	
+	bool bCanStartClimb = false;	
 	
 private:
 #pragma region ClimbCoreVariables
@@ -42,6 +42,9 @@ private:
 	float LedgeSurfaceSlopeDegrees;
 	bool bUsedMotionWarpForLedgeClimb = false;
 	bool bIsClimbDashing = false;
+	bool bCancelClimbing = false;
+	//bool bClimbDownToFloorMontageFinished = false;
+	
 	
 #pragma endregion
 	
@@ -101,6 +104,9 @@ private:
 	TObjectPtr<UAnimMontage> IdleToClimbMontage;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
+	TObjectPtr<UAnimMontage> ClimbDownToFloorMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
 	TObjectPtr<UAnimMontage> ClimbToTopMontage;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
@@ -136,6 +142,9 @@ public:
 	
 	bool IsClimbing() const;
 	bool IsClimbDashing() const;
+	bool IsInitiatingClimbing() const;
+	//bool IsClimbDownToFloorMontageComplete();
+	
 	FORCEINLINE FVector GetClimbableSurfaceNormal() const {return ClimbableSurfaceNormal;}
 
 	// When the actor is climbing the velocity is rotated along with the actor's rotation (see - GetClimbRotation).
@@ -149,6 +158,7 @@ protected:
 	void BeginPlay() override;
 	void TickComponent(float DeltaTime, enum ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 	virtual void OnMovementModeChanged(EMovementMode PreviousMovementMode, uint8 PreviousCustomMode) override;
+	virtual void OnMovementUpdated(float DeltaSeconds, const FVector& OldLocation, const FVector& OldVelocity) override;
 	void PhysCustom(float DeltaTime, int32 Iterations) override;
 	virtual float GetMaxSpeed() const override;
 	virtual float GetMaxAcceleration() const override;
@@ -184,7 +194,7 @@ private:
 	void TryStartVaulting();
 	bool CanStartVaulting(FVector& VaultStartPosition, FVector& VaultLandPosition);	
 	void StartClimbing();
-	void StopClimbing();
+	void StopClimbing(const float DeltaTime, int32 Iterations);
 
 	bool CanStartClimbDash(const EClimbingDirection ClimbingDirection, FVector& OutDashHitPoint);
 	void TryPerformClimbDash(const EClimbingDirection ClimbingDirection);
@@ -204,6 +214,9 @@ private:
 
 	UFUNCTION()
 	void MontageEnded(UAnimMontage* Montage, bool bInterrupted);
+
+	UFUNCTION()
+	void MontageStarted(UAnimMontage* Montage);
 
 	void SetMotionWarpTarget(const FName& InWarpTargetName, const FVector& InTargetLocation);
 

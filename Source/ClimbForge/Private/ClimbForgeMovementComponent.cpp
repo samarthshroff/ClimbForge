@@ -27,15 +27,25 @@ void UClimbForgeMovementComponent::BeginPlay()
 	if (OwnerActorAnimInstance != nullptr)
 	{
 		//OwnerActorAnimInstance->OnMontageEnded.AddDynamic(this, &UClimbForgeMovementComponent::MontageEnded);
-		OwnerActorAnimInstance->OnMontageBlendingOut.AddDynamic(this, &UClimbForgeMovementComponent::MontageEnded);		
+		OwnerActorAnimInstance->OnMontageBlendingOut.AddDynamic(this, &UClimbForgeMovementComponent::MontageEnded);
+		OwnerActorAnimInstance->OnMontageStarted.AddDynamic(this, &UClimbForgeMovementComponent::MontageStarted);
 	}
 }
 
 void UClimbForgeMovementComponent::TickComponent(float DeltaTime, enum ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-	TraceClimbableSurfaces();
+	//UE_LOG(LogTemp, Log, TEXT("TickComponent UpdatedComponent->GetComponentLocation():: %s"), *UpdatedComponent->GetComponentLocation().ToString());
+	if (!Velocity.IsNearlyZero())
+	{
+		TraceClimbableSurfaces();
+	}
 
+	if (!bCanStartClimb && CanStartClimbing())
+	{
+		bCanStartClimb = true;
+	}
+	
 	// Walk a few steps after climbing the ledge so that character does not have a leg in air after climbing on top.
 	if (bMoveToTargetAfterClimb)
 	{
@@ -61,6 +71,13 @@ void UClimbForgeMovementComponent::OnMovementModeChanged(EMovementMode PreviousM
 {
 	if (IsClimbing())
 	{
+		// if (bCanStartClimbingUp)
+		// {
+		// 	bCanStartClimbingUp = false;
+		// 	//PlayMontage(IdleToClimbMontage);
+		// 	Debug::Print(TEXT("Playing IdleToClimbMontage"), FColor::Red);
+		// }
+		
 		bOrientRotationToMovement = false;
 		// Half of 96.0f that is in AClimbForgeCharacter constructor.
 		CharacterOwner->GetCapsuleComponent()->SetCapsuleHalfHeight(OwnerColliderCapsuleHalfHeight*0.5f);
@@ -77,10 +94,20 @@ void UClimbForgeMovementComponent::OnMovementModeChanged(EMovementMode PreviousM
 		UpdatedComponent->SetRelativeRotation(StandRotation);
 		
 		StopMovementImmediately();
-		OnExitClimbingMode.ExecuteIfBound();
+		OnExitClimbingMode.ExecuteIfBound();		
 	}
 	
 	Super::OnMovementModeChanged(PreviousMovementMode, PreviousCustomMode);
+}
+
+void UClimbForgeMovementComponent::OnMovementUpdated(float DeltaSeconds, const FVector& OldLocation, const FVector& OldVelocity)
+{
+	if (bCanStartClimb && !IsClimbing())
+	{
+		StartClimbing();		
+	}
+	
+	Super::OnMovementUpdated(DeltaSeconds, OldLocation, OldVelocity);
 }
 
 void UClimbForgeMovementComponent::PhysCustom(float DeltaTime, int32 Iterations)
@@ -173,15 +200,15 @@ void UClimbForgeMovementComponent::ToggleClimbing(const bool bEnableClimb)
 {
 	if (bEnableClimb)
 	{
-		if (CanStartClimbing())
-		{
-			StartClimbing();
-			PlayMontage(IdleToClimbMontage);
-		}
-		else
+		// if (CanStartClimbing())
+		// {
+		// 	PlayMontage(IdleToClimbMontage);	
+		// }
+		//else
 		if (CanStartClimbingDown())
 		{
-			//StartClimbing();
+			// bCanInitiateClimb = true;
+			// StartClimbing();
 			PlayMontage(ClimbDownFromLegdeMontage);
 		}
 		else
@@ -192,18 +219,27 @@ void UClimbForgeMovementComponent::ToggleClimbing(const bool bEnableClimb)
 	else
 	{
 		// Stop climb
-		StopClimbing();
+		//StopClimbing();
+		bCancelClimbing = true;
 	}
 }
 
 bool UClimbForgeMovementComponent::CanStartClimbing()
 {
 	if (IsFalling()) return false;
+	if(IsClimbing()) return false;
+	if (Velocity.IsNearlyZero()) return false;
+
+	const FVector MovementDirection = Velocity.GetSafeNormal();
+	
 	//if (!TraceClimbableSurfaces()) return false;
 
 	// Check if it is a climbable surface by checking it's slope in degrees.
 	for (FHitResult& Hit : ClimbableSurfacesHits)
 	{
+		UE_LOG(LogTemp,Log, TEXT("The Dot Product is:: %f"), FVector::DotProduct(UpdatedComponent->GetForwardVector(), -1.0f*Hit.Normal.GetSafeNormal()));
+		if (FVector::DotProduct(UpdatedComponent->GetForwardVector(), -1.0f*Hit.Normal.GetSafeNormal()) < 0.5f) continue;
+		
 		// This is in theory the surface (to climb) normal projected onto a horizontal plane as
 		// GetSafeNormal2D uses on X and Y components.
 		const FVector HorizontalProjectedNormal = Hit.Normal.GetSafeNormal2D();
@@ -224,22 +260,13 @@ bool UClimbForgeMovementComponent::CanStartClimbing()
 		constexpr float BaseLength = 80.0f;
 		const float SteepnessMultiplier = 1.0f + (1.0f - Steepness) * 5.0f;
 	
-		FHitResult SurfaceAtEyeHeightTraceResult = TraceFromEyeHeight(BaseLength * SteepnessMultiplier);
+		FHitResult SurfaceAtEyeHeightTraceResult = TraceFromEyeHeight(BaseLength * SteepnessMultiplier, true, true);
 		
 		if (AngleInDegrees < MinimumClimbableAngleInDegrees && !bIsCeilingOrFloor && SurfaceAtEyeHeightTraceResult.bBlockingHit)
 		{
 			return true;
 		}
 	}
-
-	
-	//if (!TraceFromEyeHeight(100.0f).bBlockingHit) return false;
-	
-	// const float SurfaceSteepness = FVector::DotProduct(ClimbableSurfaceNormal, UpdatedComponent->GetForwardVector());
-	// const float TraceDistance = 100.0f;
-	// const float SteepnessMultiplier = 1.0f+(1.0f-SurfaceSteepness)*5.0f;	
-	// if (!TraceFromEyeHeight(TraceDistance*SteepnessMultiplier).bBlockingHit) return false;
-
 	return false;
 }
 
@@ -317,9 +344,26 @@ void UClimbForgeMovementComponent::StartClimbing()
 	SetMovementMode(MOVE_Custom, MOVE_Climbing);
 }
 
-void UClimbForgeMovementComponent::StopClimbing()
+void UClimbForgeMovementComponent::StopClimbing(const float DeltaTime, int32 Iterations)
 {
+	//bClimbDownToFloorMontageFinished = false;
+	bCanStartClimb = false;
+	ClimbableSurfacesHits.Empty();
+	ClimbableSurfaceLocation = FVector::ZeroVector;
+	ClimbableSurfaceNormal = FVector::ZeroVector;
+
+	FVector DropTargetLocation = UpdatedComponent->GetComponentLocation() -
+		(UpdatedComponent->GetForwardVector()*CharacterOwner->GetCapsuleComponent()->GetScaledCapsuleRadius());
+	FVector RootBoneLocation = GetCharacterOwner()->GetMesh()->GetBoneLocation(TEXT("root"));
+	
+	// UE_LOG(LogTemp, Log, TEXT("StopClimbing UpdatedComponent->GetComponentLocation():: %s"), *UpdatedComponent->GetComponentLocation().ToString());
+	// UE_LOG(LogTemp, Log, TEXT("StopClimbing RootBoneLocation:: %s"), *RootBoneLocation.ToString());
+	// UE_LOG(LogTemp, Log, TEXT("StopClimbing DropTargetLocation:: %s"), *DropTargetLocation.ToString());
+	SetMotionWarpTarget("ClimbDropLocation", DropTargetLocation);
+	PlayMontage(ClimbDownToFloorMontage);
+	SnapToClimbableSurface(DeltaTime);	
 	SetMovementMode(MOVE_Falling);
+	StartNewPhysics(DeltaTime, Iterations);
 }
 
 bool UClimbForgeMovementComponent::IsClimbing() const
@@ -332,6 +376,16 @@ bool UClimbForgeMovementComponent::IsClimbDashing() const
 	return IsClimbing() && bIsClimbDashing;
 }
 
+bool UClimbForgeMovementComponent::IsInitiatingClimbing() const
+{
+	return bCanStartClimb;
+}
+
+// bool UClimbForgeMovementComponent::IsClimbDownToFloorMontageComplete()
+// {
+// 	return bClimbDownToFloorMontageFinished;
+// }
+
 FVector UClimbForgeMovementComponent::GetUnrotatedClimbingVelocity() const
 {
 	return UKismetMathLibrary::Quat_UnrotateVector(UpdatedComponent->GetComponentQuat(), Velocity);
@@ -340,7 +394,7 @@ FVector UClimbForgeMovementComponent::GetUnrotatedClimbingVelocity() const
 bool UClimbForgeMovementComponent::TraceClimbableSurfaces()
 {
 	// Don't want to start right from the character location but a few units in front.
-	const FVector StartOffset = UpdatedComponent->GetForwardVector() * 25.0f;
+	const FVector StartOffset = UpdatedComponent->GetForwardVector() * 1.0f;
 	const FVector Start = UpdatedComponent->GetComponentLocation() + StartOffset;
 
 	// Don't want too much distance between start and end as need to generate fewer capsules for collision. 
@@ -571,9 +625,10 @@ void UClimbForgeMovementComponent::PhysClimbing(const float DeltaTime, int32 Ite
 	
 	ProcessClimbableSurfaces();
 	// TODO - Check to see if climbing needs to stop
-	if (ShouldStopClimbing() || HasReachedTheFloor())
+	if (bCancelClimbing || ShouldStopClimbing() || HasReachedTheFloor())
 	{
-		StopClimbing();
+		bCancelClimbing = false;
+		StopClimbing(DeltaTime, Iterations);
 	}
 	
 	RestorePreAdditiveRootMotionVelocity();
@@ -720,9 +775,17 @@ void UClimbForgeMovementComponent::PlayMontage(const TObjectPtr<UAnimMontage>& M
 
 void UClimbForgeMovementComponent::MontageEnded(UAnimMontage* Montage, bool bInterrupted)
 {
-	if (Montage == IdleToClimbMontage || Montage == ClimbDownFromLegdeMontage)
+	// if (Montage == IdleToClimbMontage)
+	// {
+	// 	bCanStartClimbingUp = false;
+	// 	StopMovementImmediately();
+	// 	Debug::Print(TEXT("On Montage Ended"));
+	// }
+	// else
+	if (Montage == ClimbDownFromLegdeMontage)
 	{
 		StartClimbing();
+		//bCanInitiateClimb = false;
 		StopMovementImmediately();
 	}
 	else
@@ -778,6 +841,24 @@ void UClimbForgeMovementComponent::MontageEnded(UAnimMontage* Montage, bool bInt
 	{
 		bIsClimbDashing = false;
 	}
+	// else
+	// if (Montage == ClimbDownToFloorMontage)
+	// {
+	// 	FVector RootBoneLocation = GetCharacterOwner()->GetMesh()->GetBoneLocation(TEXT("root"));
+	//
+	// 	UE_LOG(LogTemp, Log, TEXT("MontageEnded UpdatedComponent->GetComponentLocation():: %s"), *UpdatedComponent->GetComponentLocation().ToString());
+	// 	UE_LOG(LogTemp, Log, TEXT("MontageEnded RootBoneLocation:: %s"), *RootBoneLocation.ToString());
+	// 	//bClimbDownToFloorMontageFinished = true;
+	// }
+}
+
+void UClimbForgeMovementComponent::MontageStarted(UAnimMontage* Montage)
+{
+	if (Montage == ClimbDashLeftMontage || Montage == ClimbDashRightMontage ||
+		Montage == ClimbDashUpMontage || Montage == ClimbDashDownMontage)
+	{
+		bIsClimbDashing = true;
+	}
 }
 
 void UClimbForgeMovementComponent::SetMotionWarpTarget(const FName& InWarpTargetName, const FVector& InTargetLocation)
@@ -828,11 +909,12 @@ void UClimbForgeMovementComponent::TryPerformClimbDash(const EClimbingDirection 
 	
 	if (CanStartClimbDash(ClimbingDirection, DashHitPoint))
 	{
+		
 		SetMotionWarpTarget(FName("HopHitPoint"), DashHitPoint);
 		switch (ClimbingDirection)
 		{
 			case EClimbingDirection::Up:
-			{
+			{					
 				PlayMontage(ClimbDashUpMontage);
 			}
 			break;
@@ -850,7 +932,7 @@ void UClimbForgeMovementComponent::TryPerformClimbDash(const EClimbingDirection 
 			break;
 
 			case EClimbingDirection::Right:
-			{				
+			{
 				PlayMontage(ClimbDashRightMontage);
 			}
 			break;

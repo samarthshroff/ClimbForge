@@ -35,4 +35,5 @@ void UCharacterAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	bShouldMove = OwnerMovementComponent->GetCurrentAcceleration() != FVector::ZeroVector && GroundSpeed > 3.0f;
 	bIsFalling = OwnerMovementComponent->IsFalling();
 	bIsClimbing = OwnerMovementComponent->IsClimbing();
+	//bClimbDownToFloorMontageFinished = OwnerMovementComponent->IsClimbDownToFloorMontageComplete();
 }

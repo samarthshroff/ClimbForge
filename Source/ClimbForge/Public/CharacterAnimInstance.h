@@ -48,6 +48,9 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category= "Essential Movement Data", meta=(AllowPrivateAccess=true))
 	bool bIsClimbing;
 
+	// UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category= "Essential Movement Data", meta=(AllowPrivateAccess=true))
+	// bool bClimbDownToFloorMontageFinished;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category= "Essential Movement Data", meta=(AllowPrivateAccess=true))
 	FVector ClimbVelocity;
 
