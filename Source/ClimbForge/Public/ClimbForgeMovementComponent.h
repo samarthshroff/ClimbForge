@@ -41,8 +41,13 @@ private:
 	FVector ClimbToLedgeTargetLocation;
 	float LedgeSurfaceSlopeDegrees;
 	bool bUsedMotionWarpForLedgeClimb = false;
+
+	bool bCanClimbDash = false;
 	bool bIsClimbDashing = false;
 	bool bCancelClimbing = false;
+	float ClimbDashCurrentTime;
+
+	FVector ClimbDashDirection;
 	//bool bClimbDownToFloorMontageFinished = false;
 	
 	
@@ -62,7 +67,7 @@ private:
 	float ClimbFriction = 0.0f;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
-	float MaxBrakeClimbDeceleration = 400.0f;
+	float MaxBrakeClimbDeceleration = 550.0f;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
 	float MaxClimbSpeed = 100.0f;
@@ -124,6 +129,9 @@ private:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
 	TObjectPtr<UAnimMontage> ClimbDashRightMontage;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
+	UCurveFloat* ClimbDashCurveFloat;
+
 	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Character Movement: Vault", meta = (AllowPrivateAccess = "true"))
 	float MinimumVaultTraceDistance = 50.f;
 
@@ -151,6 +159,8 @@ public:
 	// In order to get the correct component velocity we need to unrotate it.
 	// It can be achieved by multiplying the Velocity with the inverse of actor's rotation (vector).
 	FVector GetUnrotatedClimbingVelocity() const;
+
+	FVector GetClimbDashDirection() const;
 #pragma endregion
 
 protected:

@@ -41,6 +41,7 @@ void UClimbForgeMovementComponent::TickComponent(float DeltaTime, enum ELevelTic
 		TraceClimbableSurfaces();
 	}
 
+	// Start the Climb - 1
 	if (!bCanStartClimb && CanStartClimbing())
 	{
 		bCanStartClimb = true;
@@ -102,6 +103,7 @@ void UClimbForgeMovementComponent::OnMovementModeChanged(EMovementMode PreviousM
 
 void UClimbForgeMovementComponent::OnMovementUpdated(float DeltaSeconds, const FVector& OldLocation, const FVector& OldVelocity)
 {
+	// Start the climb - 2
 	if (bCanStartClimb && !IsClimbing())
 	{
 		StartClimbing();		
@@ -391,6 +393,11 @@ FVector UClimbForgeMovementComponent::GetUnrotatedClimbingVelocity() const
 	return UKismetMathLibrary::Quat_UnrotateVector(UpdatedComponent->GetComponentQuat(), Velocity);
 }
 
+FVector UClimbForgeMovementComponent::GetClimbDashDirection() const
+{
+	return ClimbDashDirection;
+}
+
 bool UClimbForgeMovementComponent::TraceClimbableSurfaces()
 {
 	// Don't want to start right from the character location but a few units in front.
@@ -401,7 +408,7 @@ bool UClimbForgeMovementComponent::TraceClimbableSurfaces()
 	// In this case 2 start and end as the forward vector is a unit vector.
 	const FVector End = Start + UpdatedComponent->GetForwardVector();
 
-	ClimbableSurfacesHits = CapsuleSweepTraceByChannel(Start, End);
+	ClimbableSurfacesHits = CapsuleSweepTraceByChannel(Start, End, true, false);
 	return !ClimbableSurfacesHits.IsEmpty();
 }
 
@@ -635,8 +642,8 @@ void UClimbForgeMovementComponent::PhysClimbing(const float DeltaTime, int32 Ite
 
 	if(!HasAnimRootMotion() && !CurrentRootMotion.HasOverrideVelocity() )
 	{
-		// TODO - define max climb speed and acceleration
-		CalcVelocity(DeltaTime, ClimbFriction, true, MaxBrakeClimbDeceleration);
+		// TODO - define max climb speed and acceleration		
+		CalcVelocity(DeltaTime, ClimbFriction, false, MaxBrakeClimbDeceleration);
 	}
 
 	ApplyRootMotionToVelocity(DeltaTime);
@@ -877,6 +884,11 @@ void UClimbForgeMovementComponent::RequestClimbDash()
 	
 	const FVector UnrotatedRightVector = UKismetMathLibrary::Quat_UnrotateVector(UpdatedComponent->GetComponentQuat(), UpdatedComponent->GetRightVector());
 	const float HorizontalAxisDotResult = FVector::DotProduct(UnrotatedLastInputVector.GetSafeNormal(), UnrotatedRightVector);
+
+	Debug::Print(TEXT("HorizontalAxisDotResult: ")+FString::SanitizeFloat(HorizontalAxisDotResult)+
+		TEXT("VerticalAxisDotResult: ")+FString::SanitizeFloat(VerticalAxisDotResult), FColor::Red, 1);
+
+	Debug::Print(TEXT("Acceleration length:: ")+FString::SanitizeFloat(Acceleration.Length()));
 	
 	if (VerticalAxisDotResult > 0.9f)
 	{
