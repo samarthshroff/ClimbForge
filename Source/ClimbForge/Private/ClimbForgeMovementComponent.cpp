@@ -28,14 +28,13 @@ void UClimbForgeMovementComponent::BeginPlay()
 	{
 		//OwnerActorAnimInstance->OnMontageEnded.AddDynamic(this, &UClimbForgeMovementComponent::MontageEnded);
 		OwnerActorAnimInstance->OnMontageBlendingOut.AddDynamic(this, &UClimbForgeMovementComponent::MontageEnded);
-		OwnerActorAnimInstance->OnMontageStarted.AddDynamic(this, &UClimbForgeMovementComponent::MontageStarted);
+		//OwnerActorAnimInstance->OnMontageStarted.AddDynamic(this, &UClimbForgeMovementComponent::MontageStarted);
 	}
 }
 
 void UClimbForgeMovementComponent::TickComponent(float DeltaTime, enum ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-	//UE_LOG(LogTemp, Log, TEXT("TickComponent UpdatedComponent->GetComponentLocation():: %s"), *UpdatedComponent->GetComponentLocation().ToString());
 	if (!Velocity.IsNearlyZero())
 	{
 		TraceClimbableSurfaces();
@@ -71,14 +70,7 @@ void UClimbForgeMovementComponent::TickComponent(float DeltaTime, enum ELevelTic
 void UClimbForgeMovementComponent::OnMovementModeChanged(EMovementMode PreviousMovementMode, uint8 PreviousCustomMode)
 {
 	if (IsClimbing())
-	{
-		// if (bCanStartClimbingUp)
-		// {
-		// 	bCanStartClimbingUp = false;
-		// 	//PlayMontage(IdleToClimbMontage);
-		// 	Debug::Print(TEXT("Playing IdleToClimbMontage"), FColor::Red);
-		// }
-		
+	{	
 		bOrientRotationToMovement = false;
 		// Half of 96.0f that is in AClimbForgeCharacter constructor.
 		CharacterOwner->GetCapsuleComponent()->SetCapsuleHalfHeight(OwnerColliderCapsuleHalfHeight*0.5f);
@@ -202,15 +194,8 @@ void UClimbForgeMovementComponent::ToggleClimbing(const bool bEnableClimb)
 {
 	if (bEnableClimb)
 	{
-		// if (CanStartClimbing())
-		// {
-		// 	PlayMontage(IdleToClimbMontage);	
-		// }
-		//else
 		if (CanStartClimbingDown())
 		{
-			// bCanInitiateClimb = true;
-			// StartClimbing();
 			PlayMontage(ClimbDownFromLegdeMontage);
 		}
 		else
@@ -221,7 +206,6 @@ void UClimbForgeMovementComponent::ToggleClimbing(const bool bEnableClimb)
 	else
 	{
 		// Stop climb
-		//StopClimbing();
 		bCancelClimbing = true;
 	}
 }
@@ -234,8 +218,6 @@ bool UClimbForgeMovementComponent::CanStartClimbing()
 
 	const FVector MovementDirection = Velocity.GetSafeNormal();
 	
-	//if (!TraceClimbableSurfaces()) return false;
-
 	// Check if it is a climbable surface by checking it's slope in degrees.
 	for (FHitResult& Hit : ClimbableSurfacesHits)
 	{
@@ -329,14 +311,12 @@ bool UClimbForgeMovementComponent::ShouldStopClimbing()
 	{
 	    // The surface normal is pointing predominantly upwards. This is a floor.
 	    bIsClimbableSurface = false;
-	    //UE_LOG(LogTemp, Log, TEXT("Surface is a non-climbable Floor or Ceiling. DotProduct: %f"), DotProduct);
 	}
 	else
 	{
 	    // The surface normal is mostly horizontal relative to the player's up vector.
 	    // This means it's a wall or a climbable slope.
 	    bIsClimbableSurface = true;
-	   //UE_LOG(LogTemp, Log, TEXT("Surface is a Climbable Wall/Slope. DotProduct: %f"), DotProduct);
 	}
 	return !bIsClimbableSurface;
 }
@@ -348,7 +328,6 @@ void UClimbForgeMovementComponent::StartClimbing()
 
 void UClimbForgeMovementComponent::StopClimbing(const float DeltaTime, int32 Iterations)
 {
-	//bClimbDownToFloorMontageFinished = false;
 	bCanStartClimb = false;
 	ClimbableSurfacesHits.Empty();
 	ClimbableSurfaceLocation = FVector::ZeroVector;
@@ -357,10 +336,7 @@ void UClimbForgeMovementComponent::StopClimbing(const float DeltaTime, int32 Ite
 	FVector DropTargetLocation = UpdatedComponent->GetComponentLocation() -
 		(UpdatedComponent->GetForwardVector()*CharacterOwner->GetCapsuleComponent()->GetScaledCapsuleRadius());
 	FVector RootBoneLocation = GetCharacterOwner()->GetMesh()->GetBoneLocation(TEXT("root"));
-	
-	// UE_LOG(LogTemp, Log, TEXT("StopClimbing UpdatedComponent->GetComponentLocation():: %s"), *UpdatedComponent->GetComponentLocation().ToString());
-	// UE_LOG(LogTemp, Log, TEXT("StopClimbing RootBoneLocation:: %s"), *RootBoneLocation.ToString());
-	// UE_LOG(LogTemp, Log, TEXT("StopClimbing DropTargetLocation:: %s"), *DropTargetLocation.ToString());
+
 	StopClimbDash();
 	SetMotionWarpTarget("ClimbDropLocation", DropTargetLocation);
 	PlayMontage(ClimbDownToFloorMontage);
@@ -383,11 +359,6 @@ bool UClimbForgeMovementComponent::IsInitiatingClimbing() const
 {
 	return bCanStartClimb;
 }
-
-// bool UClimbForgeMovementComponent::IsClimbDownToFloorMontageComplete()
-// {
-// 	return bClimbDownToFloorMontageFinished;
-// }
 
 FVector UClimbForgeMovementComponent::GetUnrotatedClimbingVelocity() const
 {
@@ -684,7 +655,6 @@ void UClimbForgeMovementComponent::PhysClimbing(const float DeltaTime, int32 Ite
 		// Reset the character rotation leaving only the Yaw unaffected. This improves the motion when the character is climbing steep surfaces.
 		const FRotator StandRotation = FRotator(0, UpdatedComponent->GetComponentRotation().Yaw, 0);
 		UpdatedComponent->SetRelativeRotation(StandRotation);
-		//SetMotionWarpTarget("WalkToTargetAfterClimb", WalkToTargetAfterClimb);
 		PlayMontage(ClimbToTopMontage);
 	}
 
@@ -733,8 +703,6 @@ void UClimbForgeMovementComponent::ProcessClimbableSurfaces()
 
 	const FVector SweepStart = UpdatedComponent->GetComponentLocation();
 	const FCollisionShape SphereShape = FCollisionShape::MakeSphere(5.0f);
-
-	//Debug::Print(TEXT("ClimbableSurfacesHits:: ")+FString::FromInt(ClimbableSurfacesHits.Num()));
 	
 	for (FHitResult SurfaceHits : ClimbableSurfacesHits)
 	{
@@ -753,16 +721,10 @@ void UClimbForgeMovementComponent::ProcessClimbableSurfaces()
 		//DrawDebugSphereTraceSingle(GetWorld(), SweepStart, End, 5.0f,EDrawDebugTrace::ForOneFrame, bHit, SphereHit, FColor::Blue, FColor::Red, 25.0f);
 		ClimbableSurfaceLocation += SphereHit.Location;
 		ClimbableSurfaceNormal += SphereHit.Normal;
-		
-		// ClimbableSurfaceLocation += SurfaceHits.ImpactPoint;
-		// ClimbableSurfaceNormal += SurfaceHits.ImpactNormal;
 	}
 
 	ClimbableSurfaceLocation /= ClimbableSurfacesHits.Num();
 	ClimbableSurfaceNormal = ClimbableSurfaceNormal.GetSafeNormal();
-
-	// Debug::Print(TEXT("ClimbableSurfaceLocation:: ")+ ClimbableSurfaceLocation.ToCompactString(), FColor::Red, 1.0f);
-	// Debug::Print(TEXT("ClimbableSurfaceNormal:: ")+ ClimbableSurfaceNormal.ToCompactString(), FColor::Orange, 2.0f);
 }
 
 FQuat UClimbForgeMovementComponent::GetClimbRotation(const float DeltaTime) const
@@ -783,14 +745,6 @@ FQuat UClimbForgeMovementComponent::GetClimbRotation(const float DeltaTime) cons
 
 inline void UClimbForgeMovementComponent::SnapToClimbableSurface(const float DeltaTime) const
 {
-	// // Do not try to snap while a montage (mainly a climb dash montage) is playing.
-	// // this let's the character move to a neighboring wall.
-	// if (OwnerActorAnimInstance->IsAnyMontagePlaying() &&
-	// 	(OwnerActorAnimInstance->GetCurrentActiveMontage() == ClimbDashLeftMontage ||
-	// 	OwnerActorAnimInstance->GetCurrentActiveMontage() == ClimbDashRightMontage ||
-	// 	OwnerActorAnimInstance->GetCurrentActiveMontage() == ClimbDashUpMontage ||
-	// 	OwnerActorAnimInstance->GetCurrentActiveMontage() == ClimbDashDownMontage)) return;
-	
 	const FVector CurrentLocation = UpdatedComponent->GetComponentLocation();
 	const FVector ForwardVector = UpdatedComponent->GetForwardVector();
 
@@ -805,13 +759,6 @@ inline void UClimbForgeMovementComponent::SnapToClimbableSurface(const float Del
 	// How fast to snap the actor to the climbable surface.
 	const float SnapSpeed = ClimbSnapSpeed * ((Velocity.Length() / MaxClimbSpeed) + 1);
 	UpdatedComponent->MoveComponent(SnapVector*DeltaTime*SnapSpeed, UpdatedComponent->GetComponentQuat(), true);	
-	
-	// // The Vector (distance and direction) required for us to snap the actor to the climbable surface.
-	// const FVector SnapVector = -1.0f*ClimbableSurfaceNormal*(ProjectedVector.Length()-45.0f);
-	//
-	// const float SnapSpeed = 5.0f * ((Velocity.Length() / MaxClimbSpeed) + 1);
-	// UpdatedComponent->MoveComponent(SnapVector * SnapSpeed * DeltaTime, UpdatedComponent->GetComponentQuat(), true);
-
 }
 
 void UClimbForgeMovementComponent::PlayMontage(const TObjectPtr<UAnimMontage>& MontageToPlay) const
@@ -825,17 +772,9 @@ void UClimbForgeMovementComponent::PlayMontage(const TObjectPtr<UAnimMontage>& M
 
 void UClimbForgeMovementComponent::MontageEnded(UAnimMontage* Montage, bool bInterrupted)
 {
-	// if (Montage == IdleToClimbMontage)
-	// {
-	// 	bCanStartClimbingUp = false;
-	// 	StopMovementImmediately();
-	// 	Debug::Print(TEXT("On Montage Ended"));
-	// }
-	// else
 	if (Montage == ClimbDownFromLegdeMontage)
 	{
 		StartClimbing();
-		//bCanInitiateClimb = false;
 		StopMovementImmediately();
 	}
 	else
@@ -875,40 +814,11 @@ void UClimbForgeMovementComponent::MontageEnded(UAnimMontage* Montage, bool bInt
 	{
 		SetMovementMode(MOVE_Walking);	
 	}
-	// else
-	// if (Montage == ClimbDashLeftMontage || Montage == ClimbDashRightMontage)
-	// {
-	// 	bIsClimbDashing = false;
-	// 	FVector CurrentLocation = UpdatedComponent->GetComponentLocation();
-	// 	if (CurrentLocation.Z != CharacterLocationBeforeDashMontage.Z)
-	// 	{
-	// 		CurrentLocation.Z = CharacterLocationBeforeDashMontage.Z;
-	// 		UpdatedComponent->SetWorldLocation(CurrentLocation);
-	// 	}
-	// }
-	// else
-	// if (Montage == ClimbDashUpMontage || Montage == ClimbDashDownMontage)
-	// {
-	// 	bIsClimbDashing = false;
-	// }
-	// else
-	// if (Montage == ClimbDownToFloorMontage)
-	// {
-	// 	FVector RootBoneLocation = GetCharacterOwner()->GetMesh()->GetBoneLocation(TEXT("root"));
-	//
-	// 	UE_LOG(LogTemp, Log, TEXT("MontageEnded UpdatedComponent->GetComponentLocation():: %s"), *UpdatedComponent->GetComponentLocation().ToString());
-	// 	UE_LOG(LogTemp, Log, TEXT("MontageEnded RootBoneLocation:: %s"), *RootBoneLocation.ToString());
-	// 	//bClimbDownToFloorMontageFinished = true;
-	// }
 }
 
 void UClimbForgeMovementComponent::MontageStarted(UAnimMontage* Montage)
 {
-	// if (Montage == ClimbDashLeftMontage || Montage == ClimbDashRightMontage ||
-	// 	Montage == ClimbDashUpMontage || Montage == ClimbDashDownMontage)
-	// {
-	// 	bIsClimbDashing = true;
-	// }
+
 }
 
 void UClimbForgeMovementComponent::SetMotionWarpTarget(const FName& InWarpTargetName, const FVector& InTargetLocation)
@@ -933,180 +843,6 @@ void UClimbForgeMovementComponent::RequestClimbDash()
 			ClimbDashDirection = Acceleration.GetSafeNormal();
 		}
 	}
-	// const FVector UnrotatedLastInputVector = UKismetMathLibrary::Quat_UnrotateVector(UpdatedComponent->GetComponentQuat(), GetLastInputVector());
-	// 	
-	// const float VerticalAxisDotResult = FVector::DotProduct(UnrotatedLastInputVector.GetSafeNormal(), UpdatedComponent->GetUpVector());
-	//
-	// const FVector UnrotatedRightVector = UKismetMathLibrary::Quat_UnrotateVector(UpdatedComponent->GetComponentQuat(), UpdatedComponent->GetRightVector());
-	// const float HorizontalAxisDotResult = FVector::DotProduct(UnrotatedLastInputVector.GetSafeNormal(), UnrotatedRightVector);
-	//
-	// Debug::Print(TEXT("HorizontalAxisDotResult: ")+FString::SanitizeFloat(HorizontalAxisDotResult)+
-	// 	TEXT("VerticalAxisDotResult: ")+FString::SanitizeFloat(VerticalAxisDotResult), FColor::Red, 1);
-	//
-	// Debug::Print(TEXT("Acceleration length:: ")+FString::SanitizeFloat(Acceleration.Length()));
-	//
-	// if (VerticalAxisDotResult > 0.9f)
-	// {
-	// 	TryPerformClimbDash(EClimbingDirection::Up);
-	// }
-	// else
-	// if (VerticalAxisDotResult < -0.9f)
-	// {
-	// 	TryPerformClimbDash(EClimbingDirection::Down);
-	// }
-	// else
-	// if (HorizontalAxisDotResult > 0.9f)
-	// {
-	// 	TryPerformClimbDash(EClimbingDirection::Right);
-	// }
-	// else
-	// if (HorizontalAxisDotResult < -0.9f)
-	// {
-	// 	TryPerformClimbDash(EClimbingDirection::Left);
-	// }
-	// else
-	// {
-	// 	Debug::Print(TEXT("Invalid direction for dash"), FColor::Red, 1);		
-	// }
-}
-
-// void UClimbForgeMovementComponent::TryPerformClimbDash(const EClimbingDirection ClimbingDirection)
-// {
-// 	FVector DashHitPoint = FVector::ZeroVector;
-// 	
-// 	if (CanStartClimbDash(ClimbingDirection, DashHitPoint))
-// 	{
-// 		
-// 		SetMotionWarpTarget(FName("HopHitPoint"), DashHitPoint);
-// 		switch (ClimbingDirection)
-// 		{
-// 			case EClimbingDirection::Up:
-// 			{					
-// 				PlayMontage(ClimbDashUpMontage);
-// 			}
-// 			break;
-//
-// 			case EClimbingDirection::Down:
-// 			{
-// 				PlayMontage(ClimbDashDownMontage);
-// 			}
-// 			break;
-//
-// 			case EClimbingDirection::Left:
-// 			{
-// 				PlayMontage(ClimbDashLeftMontage);
-// 			}
-// 			break;
-//
-// 			case EClimbingDirection::Right:
-// 			{
-// 				PlayMontage(ClimbDashRightMontage);
-// 			}
-// 			break;
-// 		
-// 		default: ;
-// 		}
-// 	}
-// }
-
-bool UClimbForgeMovementComponent::CanStartClimbDash(const EClimbingDirection ClimbingDirection, FVector& OutDashHitPoint)
-{
-	FHitResult DashHit;
-	FHitResult EdgeHit;
-
-	// The montages played here are root motion based so motion warp will set the root bone to the
-	// given impact location. This, we need this offset to align the character correctly during and after montage play.
-	FVector RootBoneLocation = GetCharacterOwner()->GetMesh()->GetBoneLocation(TEXT("root"));
-	const float ZOffset = UpdatedComponent->GetComponentLocation().Z - RootBoneLocation.Z;	
-	
-	switch (ClimbingDirection)
-	{
-		case EClimbingDirection::Up:
-		{
-			DashHit = TraceFromEyeHeight(ClimbDashTraceLength, ClimbDashDistance);
-			EdgeHit = TraceFromEyeHeight(ClimbDashTraceLength, ClimbDashEdgeTraceOffset);
-		}
-		break;
-
-		case EClimbingDirection::Down:
-		{
-			// The reference point here is the hip of the character (where the capsule ends) and not the eye
-			const float Offset = CharacterOwner->GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight()+ClimbDashDistance;
-			const FVector Start = UpdatedComponent->GetComponentLocation() + ((-1.0f*UpdatedComponent->GetUpVector())*Offset);
-			const FVector End = Start + (UpdatedComponent->GetForwardVector() * ClimbDashTraceLength);
-			DashHit = LineTraceByChannel(Start, End);
-			
-			if (DashHit.bBlockingHit)
-			{
-				OutDashHitPoint = DashHit.ImpactPoint;
-				// Root motion is at the bottom of character and the hit point is at the top of the character capsule.
-				// SO offsetting the Impact point Z with the difference between character Z and Root Z so
-				// motion warp sets teh root further down than the impact point and the character chest lies at the impact point.
-				OutDashHitPoint.Z -= ZOffset;
-				return true;
-			}			
-		}
-		break;
-
-		case EClimbingDirection::Left:
-		{
-			FVector LeftHandBoneLocation = GetCharacterOwner()->GetMesh()->GetBoneLocation(TEXT("hand_l"));				
-			FVector EyeLevelVector = UpdatedComponent->GetComponentLocation() + (UpdatedComponent->GetUpVector() * (CharacterOwner->BaseEyeHeight + ClimbDashEyeHeightTraceOffset));
-			EyeLevelVector.Y = LeftHandBoneLocation.Y;
-			
-			const FVector DashHitStart = EyeLevelVector + (-1.0f*UpdatedComponent->GetRightVector()*ClimbDashDistance);				
-			const FVector DashHitEnd = DashHitStart + (UpdatedComponent->GetForwardVector() * ClimbDashTraceLength);
-				
-			DashHit = LineTraceByChannel(DashHitStart, DashHitEnd);
-				
-			const FVector EdgeHitStart = EyeLevelVector + (-1.0f*UpdatedComponent->GetRightVector()*ClimbDashEdgeTraceOffset);				
-			const FVector EdgeHitEnd = EdgeHitStart + (UpdatedComponent->GetForwardVector() * ClimbDashTraceLength);
-			EdgeHit = LineTraceByChannel(EdgeHitStart, EdgeHitEnd);
-		}
-		break;
-
-		case EClimbingDirection::Right:
-		{
-			FVector RightHandBoneLocation = GetCharacterOwner()->GetMesh()->GetBoneLocation(TEXT("hand_r"));	
-			FVector EyeLevelVector = UpdatedComponent->GetComponentLocation() + (UpdatedComponent->GetUpVector() * (CharacterOwner->BaseEyeHeight + ClimbDashEyeHeightTraceOffset));
-			EyeLevelVector.Y = RightHandBoneLocation.Y;
-
-			const FVector DashHitStart = EyeLevelVector + (UpdatedComponent->GetRightVector()*ClimbDashDistance);
-			const FVector DashHitEnd = DashHitStart + (UpdatedComponent->GetForwardVector() * ClimbDashTraceLength);
-				
-			DashHit = LineTraceByChannel(DashHitStart, DashHitEnd);
-
-			const FVector EdgeHitStart = EyeLevelVector + (UpdatedComponent->GetRightVector()*ClimbDashEdgeTraceOffset);				
-			const FVector EdgeHitEnd = EdgeHitStart + (UpdatedComponent->GetForwardVector() * ClimbDashTraceLength);
-			EdgeHit = LineTraceByChannel(EdgeHitStart, EdgeHitEnd);
-		}
-		break;
-		
-		default: ;
-	}
-
-	if (DashHit.bBlockingHit && EdgeHit.bBlockingHit)
-	{
-		if (ClimbingDirection == EClimbingDirection::Left || ClimbingDirection == EClimbingDirection::Right)
-		{
-			CharacterLocationBeforeDashMontage = UpdatedComponent->GetComponentLocation();
-			OutDashHitPoint = DashHit.Location;
-			// Root motion is at the bottom of character and the hit point is at the top of the character capsule.
-			// So mapping the hit point Z to root motion Z
-			OutDashHitPoint.Z = RootBoneLocation.Z;
-		}
-		else
-		{
-			OutDashHitPoint = DashHit.ImpactPoint;
-			// Root motion is at the bottom of character and the hit point is at the top of the character capsule.
-			// So offsetting the Impact point Z with the difference between character Z and Root Z so
-			// motion warp sets the root further down than the impact point and the character chest lies at the impact point.
-			OutDashHitPoint.Z -= ZOffset; 
-		}		
-		
-		return true;
-	}
-	return false;	
 }
 
 #pragma endregion

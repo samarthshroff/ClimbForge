@@ -228,9 +228,6 @@ private:
 	void MontageStarted(UAnimMontage* Montage);
 
 	void SetMotionWarpTarget(const FName& InWarpTargetName, const FVector& InTargetLocation);
-
-	bool CanStartClimbDash(const EClimbingDirection ClimbingDirection, FVector& OutDashHitPoint);
-	//void TryPerformClimbDash(const EClimbingDirection ClimbingDirection);
 	
 	UFUNCTION()
 	void UpdateClimbDash(float DeltaTime);
