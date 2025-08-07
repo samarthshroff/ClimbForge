@@ -36,8 +36,7 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category= "Essential Movement Data", meta=(AllowPrivateAccess=true))
 	float AirSpeed;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category= "Essential Movement Data", meta=(AllowPrivateAccess=true))
-	FVector Velocity;
+
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category= "Essential Movement Data", meta=(AllowPrivateAccess=true))
 	bool bShouldMove;
@@ -52,7 +51,16 @@ protected:
 	// bool bClimbDownToFloorMontageFinished;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category= "Essential Movement Data", meta=(AllowPrivateAccess=true))
+	bool bIsClimbDashing;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category= "Essential Movement Data", meta=(AllowPrivateAccess=true))
 	FVector ClimbVelocity;
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category= "Essential Movement Data", meta=(AllowPrivateAccess=true))
+	FVector Velocity;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category= "Essential Movement Data", meta=(AllowPrivateAccess=true))
+	FVector ClimbDashDirection;
 
 #pragma endregion
 	

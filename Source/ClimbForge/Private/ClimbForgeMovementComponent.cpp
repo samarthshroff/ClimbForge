@@ -361,6 +361,7 @@ void UClimbForgeMovementComponent::StopClimbing(const float DeltaTime, int32 Ite
 	// UE_LOG(LogTemp, Log, TEXT("StopClimbing UpdatedComponent->GetComponentLocation():: %s"), *UpdatedComponent->GetComponentLocation().ToString());
 	// UE_LOG(LogTemp, Log, TEXT("StopClimbing RootBoneLocation:: %s"), *RootBoneLocation.ToString());
 	// UE_LOG(LogTemp, Log, TEXT("StopClimbing DropTargetLocation:: %s"), *DropTargetLocation.ToString());
+	StopClimbDash();
 	SetMotionWarpTarget("ClimbDropLocation", DropTargetLocation);
 	PlayMontage(ClimbDownToFloorMontage);
 	SnapToClimbableSurface(DeltaTime);	
@@ -638,12 +639,27 @@ void UClimbForgeMovementComponent::PhysClimbing(const float DeltaTime, int32 Ite
 		StopClimbing(DeltaTime, Iterations);
 	}
 	
+	UpdateClimbDash(DeltaTime);
 	RestorePreAdditiveRootMotionVelocity();
 
 	if(!HasAnimRootMotion() && !CurrentRootMotion.HasOverrideVelocity() )
 	{
-		// TODO - define max climb speed and acceleration		
-		CalcVelocity(DeltaTime, ClimbFriction, false, MaxBrakeClimbDeceleration);
+		if (bIsClimbDashing)
+		{
+			// Align the dash direction with the surface so that character can dash (rotate) around corners.
+			// Taking the 2d part of the normal as I don't want Z component of surface normal.
+			const FVector SurfaceNormal = GetClimbableSurfaceNormal().GetSafeNormal2D();
+			ClimbDashDirection = FVector::VectorPlaneProject(ClimbDashDirection, SurfaceNormal);
+
+			// Get the current speed of the dash from the curve table using the dash time.
+			const float DashCurveSpeed = ClimbDashCurveFloat->GetFloatValue(ClimbDashCurrentTime);
+			Velocity = ClimbDashDirection * DashCurveSpeed;
+		}
+		else
+		{
+			// TODO - define max climb speed and acceleration		
+			CalcVelocity(DeltaTime, ClimbFriction, false, MaxBrakeClimbDeceleration);
+		}		
 	}
 
 	ApplyRootMotionToVelocity(DeltaTime);
@@ -679,6 +695,33 @@ void UClimbForgeMovementComponent::PhysClimbing(const float DeltaTime, int32 Ite
 
 	// TODO - Snap movement to climbable surfaces.
 	SnapToClimbableSurface(DeltaTime);
+}
+
+void UClimbForgeMovementComponent::UpdateClimbDash(const float DeltaTime)
+{
+	if (!bIsClimbDashing)
+	{
+		return;
+	}
+	ClimbDashCurrentTime += DeltaTime;
+
+	// Maybe I can cache these 2 in BeginPlay. 
+	float MinTime;
+	float MaxTime;
+	ClimbDashCurveFloat->GetTimeRange(MinTime, MaxTime);
+	// Stop climbing if the dash current time is >= last keyframe time.
+	if (ClimbDashCurrentTime >= MaxTime)
+	{
+		StopClimbDash();
+	}
+}
+
+void UClimbForgeMovementComponent::StopClimbDash()
+{
+	Debug::Print(TEXT("UClimbForgeMovementComponent::StopClimbDash."));
+	bIsClimbDashing = false;
+	ClimbDashCurrentTime = 0.0f;
+	ClimbDashDirection = FVector::ZeroVector;
 }
 
 void UClimbForgeMovementComponent::ProcessClimbableSurfaces()
@@ -734,8 +777,8 @@ FQuat UClimbForgeMovementComponent::GetClimbRotation(const float DeltaTime) cons
 
 	// as the target needs to be the climbable surface and not it's normal.
 	const FQuat TargetQuat = FRotationMatrix::MakeFromX(-1.0f*ClimbableSurfaceNormal).ToQuat();
-	const float RotationSpeed = 5.0f * FMath::Max(1, Velocity.Length() / MaxClimbSpeed);
-	return FMath::QInterpTo(CurrentQuat,TargetQuat,DeltaTime,5.0f);	
+	const float RotationSpeed = ClimbRotationSpeed * FMath::Max(1, Velocity.Length() / MaxClimbSpeed);
+	return FMath::QInterpTo(CurrentQuat,TargetQuat,DeltaTime,RotationSpeed);	
 }
 
 inline void UClimbForgeMovementComponent::SnapToClimbableSurface(const float DeltaTime) const
@@ -832,22 +875,22 @@ void UClimbForgeMovementComponent::MontageEnded(UAnimMontage* Montage, bool bInt
 	{
 		SetMovementMode(MOVE_Walking);	
 	}
-	else
-	if (Montage == ClimbDashLeftMontage || Montage == ClimbDashRightMontage)
-	{
-		bIsClimbDashing = false;
-		FVector CurrentLocation = UpdatedComponent->GetComponentLocation();
-		if (CurrentLocation.Z != CharacterLocationBeforeDashMontage.Z)
-		{
-			CurrentLocation.Z = CharacterLocationBeforeDashMontage.Z;
-			UpdatedComponent->SetWorldLocation(CurrentLocation);
-		}
-	}
-	else
-	if (Montage == ClimbDashUpMontage || Montage == ClimbDashDownMontage)
-	{
-		bIsClimbDashing = false;
-	}
+	// else
+	// if (Montage == ClimbDashLeftMontage || Montage == ClimbDashRightMontage)
+	// {
+	// 	bIsClimbDashing = false;
+	// 	FVector CurrentLocation = UpdatedComponent->GetComponentLocation();
+	// 	if (CurrentLocation.Z != CharacterLocationBeforeDashMontage.Z)
+	// 	{
+	// 		CurrentLocation.Z = CharacterLocationBeforeDashMontage.Z;
+	// 		UpdatedComponent->SetWorldLocation(CurrentLocation);
+	// 	}
+	// }
+	// else
+	// if (Montage == ClimbDashUpMontage || Montage == ClimbDashDownMontage)
+	// {
+	// 	bIsClimbDashing = false;
+	// }
 	// else
 	// if (Montage == ClimbDownToFloorMontage)
 	// {
@@ -861,11 +904,11 @@ void UClimbForgeMovementComponent::MontageEnded(UAnimMontage* Montage, bool bInt
 
 void UClimbForgeMovementComponent::MontageStarted(UAnimMontage* Montage)
 {
-	if (Montage == ClimbDashLeftMontage || Montage == ClimbDashRightMontage ||
-		Montage == ClimbDashUpMontage || Montage == ClimbDashDownMontage)
-	{
-		bIsClimbDashing = true;
-	}
+	// if (Montage == ClimbDashLeftMontage || Montage == ClimbDashRightMontage ||
+	// 	Montage == ClimbDashUpMontage || Montage == ClimbDashDownMontage)
+	// {
+	// 	bIsClimbDashing = true;
+	// }
 }
 
 void UClimbForgeMovementComponent::SetMotionWarpTarget(const FName& InWarpTargetName, const FVector& InTargetLocation)
@@ -877,82 +920,94 @@ void UClimbForgeMovementComponent::SetMotionWarpTarget(const FName& InWarpTarget
 }
 
 void UClimbForgeMovementComponent::RequestClimbDash()
-{	
-	const FVector UnrotatedLastInputVector = UKismetMathLibrary::Quat_UnrotateVector(UpdatedComponent->GetComponentQuat(), GetLastInputVector());
-		
-	const float VerticalAxisDotResult = FVector::DotProduct(UnrotatedLastInputVector.GetSafeNormal(), UpdatedComponent->GetUpVector());
-	
-	const FVector UnrotatedRightVector = UKismetMathLibrary::Quat_UnrotateVector(UpdatedComponent->GetComponentQuat(), UpdatedComponent->GetRightVector());
-	const float HorizontalAxisDotResult = FVector::DotProduct(UnrotatedLastInputVector.GetSafeNormal(), UnrotatedRightVector);
-
-	Debug::Print(TEXT("HorizontalAxisDotResult: ")+FString::SanitizeFloat(HorizontalAxisDotResult)+
-		TEXT("VerticalAxisDotResult: ")+FString::SanitizeFloat(VerticalAxisDotResult), FColor::Red, 1);
-
-	Debug::Print(TEXT("Acceleration length:: ")+FString::SanitizeFloat(Acceleration.Length()));
-	
-	if (VerticalAxisDotResult > 0.9f)
-	{
-		TryPerformClimbDash(EClimbingDirection::Up);
-	}
-	else
-	if (VerticalAxisDotResult < -0.9f)
-	{
-		TryPerformClimbDash(EClimbingDirection::Down);
-	}
-	else
-	if (HorizontalAxisDotResult > 0.9f)
-	{
-		TryPerformClimbDash(EClimbingDirection::Right);
-	}
-	else
-	if (HorizontalAxisDotResult < -0.9f)
-	{
-		TryPerformClimbDash(EClimbingDirection::Left);
-	}
-	else
-	{
-		Debug::Print(TEXT("Invalid direction for dash"), FColor::Red, 1);		
-	}
-}
-
-void UClimbForgeMovementComponent::TryPerformClimbDash(const EClimbingDirection ClimbingDirection)
 {
-	FVector DashHitPoint = FVector::ZeroVector;
-	
-	if (CanStartClimbDash(ClimbingDirection, DashHitPoint))
+	if (ClimbDashCurveFloat != nullptr && !bIsClimbDashing)
 	{
-		
-		SetMotionWarpTarget(FName("HopHitPoint"), DashHitPoint);
-		switch (ClimbingDirection)
+		bIsClimbDashing = true;
+		ClimbDashCurrentTime = 0.0f;
+
+		ClimbDashDirection = UpdatedComponent->GetUpVector();
+
+		if (Acceleration.Length() > MaxClimbAcceleration / 10.0f)
 		{
-			case EClimbingDirection::Up:
-			{					
-				PlayMontage(ClimbDashUpMontage);
-			}
-			break;
-
-			case EClimbingDirection::Down:
-			{
-				PlayMontage(ClimbDashDownMontage);
-			}
-			break;
-
-			case EClimbingDirection::Left:
-			{
-				PlayMontage(ClimbDashLeftMontage);
-			}
-			break;
-
-			case EClimbingDirection::Right:
-			{
-				PlayMontage(ClimbDashRightMontage);
-			}
-			break;
-		
-		default: ;
+			ClimbDashDirection = Acceleration.GetSafeNormal();
 		}
 	}
+	// const FVector UnrotatedLastInputVector = UKismetMathLibrary::Quat_UnrotateVector(UpdatedComponent->GetComponentQuat(), GetLastInputVector());
+	// 	
+	// const float VerticalAxisDotResult = FVector::DotProduct(UnrotatedLastInputVector.GetSafeNormal(), UpdatedComponent->GetUpVector());
+	//
+	// const FVector UnrotatedRightVector = UKismetMathLibrary::Quat_UnrotateVector(UpdatedComponent->GetComponentQuat(), UpdatedComponent->GetRightVector());
+	// const float HorizontalAxisDotResult = FVector::DotProduct(UnrotatedLastInputVector.GetSafeNormal(), UnrotatedRightVector);
+	//
+	// Debug::Print(TEXT("HorizontalAxisDotResult: ")+FString::SanitizeFloat(HorizontalAxisDotResult)+
+	// 	TEXT("VerticalAxisDotResult: ")+FString::SanitizeFloat(VerticalAxisDotResult), FColor::Red, 1);
+	//
+	// Debug::Print(TEXT("Acceleration length:: ")+FString::SanitizeFloat(Acceleration.Length()));
+	//
+	// if (VerticalAxisDotResult > 0.9f)
+	// {
+	// 	TryPerformClimbDash(EClimbingDirection::Up);
+	// }
+	// else
+	// if (VerticalAxisDotResult < -0.9f)
+	// {
+	// 	TryPerformClimbDash(EClimbingDirection::Down);
+	// }
+	// else
+	// if (HorizontalAxisDotResult > 0.9f)
+	// {
+	// 	TryPerformClimbDash(EClimbingDirection::Right);
+	// }
+	// else
+	// if (HorizontalAxisDotResult < -0.9f)
+	// {
+	// 	TryPerformClimbDash(EClimbingDirection::Left);
+	// }
+	// else
+	// {
+	// 	Debug::Print(TEXT("Invalid direction for dash"), FColor::Red, 1);		
+	// }
 }
+
+// void UClimbForgeMovementComponent::TryPerformClimbDash(const EClimbingDirection ClimbingDirection)
+// {
+// 	FVector DashHitPoint = FVector::ZeroVector;
+// 	
+// 	if (CanStartClimbDash(ClimbingDirection, DashHitPoint))
+// 	{
+// 		
+// 		SetMotionWarpTarget(FName("HopHitPoint"), DashHitPoint);
+// 		switch (ClimbingDirection)
+// 		{
+// 			case EClimbingDirection::Up:
+// 			{					
+// 				PlayMontage(ClimbDashUpMontage);
+// 			}
+// 			break;
+//
+// 			case EClimbingDirection::Down:
+// 			{
+// 				PlayMontage(ClimbDashDownMontage);
+// 			}
+// 			break;
+//
+// 			case EClimbingDirection::Left:
+// 			{
+// 				PlayMontage(ClimbDashLeftMontage);
+// 			}
+// 			break;
+//
+// 			case EClimbingDirection::Right:
+// 			{
+// 				PlayMontage(ClimbDashRightMontage);
+// 			}
+// 			break;
+// 		
+// 		default: ;
+// 		}
+// 	}
+// }
 
 bool UClimbForgeMovementComponent::CanStartClimbDash(const EClimbingDirection ClimbingDirection, FVector& OutDashHitPoint)
 {

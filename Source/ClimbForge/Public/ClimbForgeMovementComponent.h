@@ -42,7 +42,6 @@ private:
 	float LedgeSurfaceSlopeDegrees;
 	bool bUsedMotionWarpForLedgeClimb = false;
 
-	bool bCanClimbDash = false;
 	bool bIsClimbDashing = false;
 	bool bCancelClimbing = false;
 	float ClimbDashCurrentTime;
@@ -104,6 +103,9 @@ private:
 
 	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Character Movement: Climb",meta = (AllowPrivateAccess = "true"))
 	float ClimbSnapSpeed = 5.0f;
+
+	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Character Movement: Climb",meta = (AllowPrivateAccess = "true"))
+	float ClimbRotationSpeed = 5.0f;
 	
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Climb", meta=(AllowPrivateAccess=true))
 	TObjectPtr<UAnimMontage> IdleToClimbMontage;
@@ -144,7 +146,7 @@ private:
 #pragma endregion
 
 public:
-#pragma region ClimbCore
+#pragma region ClimbCore - Public
 	void ToggleClimbing(const bool bEnableClimb);
 	void RequestClimbDash();
 	
@@ -187,7 +189,7 @@ private:
 	FHitResult LineTraceByChannel(const FVector& Start, const FVector& End, const bool bShowDebugShape = false, const bool bShowPersistent = false);
 #pragma endregion
 
-#pragma region ClimbCore
+#pragma region ClimbCore - Private
 	// Trace for all climbable surfaces.
 	bool TraceClimbableSurfaces();
 
@@ -204,13 +206,10 @@ private:
 	void TryStartVaulting();
 	bool CanStartVaulting(FVector& VaultStartPosition, FVector& VaultLandPosition);	
 	void StartClimbing();
-	void StopClimbing(const float DeltaTime, int32 Iterations);
-
-	bool CanStartClimbDash(const EClimbingDirection ClimbingDirection, FVector& OutDashHitPoint);
-	void TryPerformClimbDash(const EClimbingDirection ClimbingDirection);
+	void StopClimbing(const float DeltaTime, int32 Iterations);	
 	
 	void PhysClimbing(float DeltaTime, int32 Iterations);
-
+	
 	// Get the average location from all the climbable hit results.
 	void ProcessClimbableSurfaces();
 
@@ -229,6 +228,14 @@ private:
 	void MontageStarted(UAnimMontage* Montage);
 
 	void SetMotionWarpTarget(const FName& InWarpTargetName, const FVector& InTargetLocation);
+
+	bool CanStartClimbDash(const EClimbingDirection ClimbingDirection, FVector& OutDashHitPoint);
+	//void TryPerformClimbDash(const EClimbingDirection ClimbingDirection);
+	
+	UFUNCTION()
+	void UpdateClimbDash(float DeltaTime);
+
+	void StopClimbDash();
 
 #pragma endregion
 };
