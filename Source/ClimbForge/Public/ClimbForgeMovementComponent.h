@@ -233,6 +233,6 @@ private:
 	void UpdateClimbDash(float DeltaTime);
 
 	void StopClimbDash();
-
+	
 #pragma endregion
 };

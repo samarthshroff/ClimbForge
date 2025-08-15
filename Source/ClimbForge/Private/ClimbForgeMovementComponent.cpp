@@ -62,7 +62,7 @@ void UClimbForgeMovementComponent::TickComponent(float DeltaTime, enum ELevelTic
 			Acceleration = FVector::ZeroVector;
 			ClimbToLedgeTargetLocation = FVector::ZeroVector;
 			LedgeSurfaceSlopeDegrees = 0.0f;
-			StopMovementImmediately();		
+			StopMovementImmediately();
 		}
 	}
 }
@@ -221,7 +221,8 @@ bool UClimbForgeMovementComponent::CanStartClimbing()
 	// Check if it is a climbable surface by checking it's slope in degrees.
 	for (FHitResult& Hit : ClimbableSurfacesHits)
 	{
-		UE_LOG(LogTemp,Log, TEXT("The Dot Product is:: %f"), FVector::DotProduct(UpdatedComponent->GetForwardVector(), -1.0f*Hit.Normal.GetSafeNormal()));
+		//UE_LOG(LogTemp,Log, TEXT("The Dot Product is:: %f"), FVector::DotProduct(UpdatedComponent->GetForwardVector(), -1.0f*Hit.Normal.GetSafeNormal()));
+		
 		if (FVector::DotProduct(UpdatedComponent->GetForwardVector(), -1.0f*Hit.Normal.GetSafeNormal()) < 0.5f) continue;
 		
 		// This is in theory the surface (to climb) normal projected onto a horizontal plane as
@@ -428,7 +429,7 @@ bool UClimbForgeMovementComponent::HasReachedTheFloor()
 bool UClimbForgeMovementComponent::HasReachedTheLedge()
 {
 	if (OwnerActorAnimInstance == nullptr) return false;
-	if (OwnerActorAnimInstance->Montage_IsPlaying(ClimbToTopMontage)) return true;
+	if (OwnerActorAnimInstance->Montage_IsPlaying(ClimbToTopMontage)) return false;
 	
 	const UCapsuleComponent* Capsule = CharacterOwner->GetCapsuleComponent();
 	const float TraceDistance = Capsule->GetUnscaledCapsuleRadius() * 2.5f;
@@ -642,6 +643,7 @@ void UClimbForgeMovementComponent::PhysClimbing(const float DeltaTime, int32 Ite
 
 	// TODO - Handle Climb rotation.
 	SafeMoveUpdatedComponent(Adjusted, GetClimbRotation(DeltaTime), true, Hit);
+	//SafeMoveUpdatedComponent(Adjusted, UpdatedComponent->GetComponentQuat(), true, Hit);
 
 	if (Hit.Time < 1.f)
 	{
@@ -652,6 +654,7 @@ void UClimbForgeMovementComponent::PhysClimbing(const float DeltaTime, int32 Ite
 
 	if (HasReachedTheLedge())
 	{
+		//UE_LOG(LogTemp, Log, TEXT("Has reached Ledge"));
 		// Reset the character rotation leaving only the Yaw unaffected. This improves the motion when the character is climbing steep surfaces.
 		const FRotator StandRotation = FRotator(0, UpdatedComponent->GetComponentRotation().Yaw, 0);
 		UpdatedComponent->SetRelativeRotation(StandRotation);
@@ -688,7 +691,7 @@ void UClimbForgeMovementComponent::UpdateClimbDash(const float DeltaTime)
 
 void UClimbForgeMovementComponent::StopClimbDash()
 {
-	Debug::Print(TEXT("UClimbForgeMovementComponent::StopClimbDash."));
+	//Debug::Print(TEXT("UClimbForgeMovementComponent::StopClimbDash."));
 	bIsClimbDashing = false;
 	ClimbDashCurrentTime = 0.0f;
 	ClimbDashDirection = FVector::ZeroVector;
@@ -731,14 +734,31 @@ FQuat UClimbForgeMovementComponent::GetClimbRotation(const float DeltaTime) cons
 {
 	const FQuat CurrentQuat = UpdatedComponent->GetComponentQuat();
 
+	// if (HasAnimRootMotion())
+	// {
+	// 	UE_LOG(LogTemp, Log, TEXT("GetClimbRotation: HasAnimRootMotion"));
+	// }
+	// if (CurrentRootMotion.HasOverrideVelocity())
+	// {
+	// 	UE_LOG(LogTemp, Log, TEXT("GetClimbRotation: HasOverrideVelocity"));
+	// 	
+	// }
 	// If we want to use the root motion to override the rotation
 	if (HasAnimRootMotion() && CurrentRootMotion.HasOverrideVelocity())
 	{
+		UE_LOG(LogTemp, Log, TEXT("GetClimbRotation: return from the if"));
 		return CurrentQuat;
 	}
 
 	// as the target needs to be the climbable surface and not it's normal.
+	// UE_LOG(LogTemp, Log, TEXT("GetClimbRotation UpdatedComponent->GetForwardVector(): %s"), *UpdatedComponent->GetForwardVector().ToString());
+	// UE_LOG(LogTemp, Log, TEXT("GetClimbRotation ClimbableSurfaceNormal: %s"), *ClimbableSurfaceNormal.ToString());
+	
 	const FQuat TargetQuat = FRotationMatrix::MakeFromX(-1.0f*ClimbableSurfaceNormal).ToQuat();
+
+	// UE_LOG(LogTemp, Log, TEXT("GetClimbRotation CurrentQuat: %s"), *CurrentQuat.ToString());
+	// UE_LOG(LogTemp, Log, TEXT("GetClimbRotation TargetQuat: %s"), *TargetQuat.ToString());
+	
 	const float RotationSpeed = ClimbRotationSpeed * FMath::Max(1, Velocity.Length() / MaxClimbSpeed);
 	return FMath::QInterpTo(CurrentQuat,TargetQuat,DeltaTime,RotationSpeed);	
 }
@@ -788,7 +808,7 @@ void UClimbForgeMovementComponent::MontageEnded(UAnimMontage* Montage, bool bInt
 				Owner->GetMotionWarpingComponent()->RemoveWarpTarget("LedgeWarpOffset");					
 			}
 		}
-
+		
 		// Check if the target location is in front or behind the character's current location.
 		// Proceed with the logic only if the target location is in front.
 		FVector CurrentLocation = UpdatedComponent->GetComponentLocation();
@@ -796,8 +816,8 @@ void UClimbForgeMovementComponent::MontageEnded(UAnimMontage* Montage, bool bInt
 		// Get the direction from character to target location.
 		const FVector ToTarget = (ClimbToLedgeTargetLocation - CurrentLocation).GetSafeNormal();
 		const float DotValue = FVector::DotProduct(ForwardVector, ToTarget);
-
-		// The target is in front.
+		
+		// The target is in front. Let the character walk a few steps forward till it reaches the target location.
 		if (DotValue > 0.0f)
 		{
 			// Adjust the character Z here as in the Tick logic we consider only X and Y components
@@ -818,7 +838,7 @@ void UClimbForgeMovementComponent::MontageEnded(UAnimMontage* Montage, bool bInt
 
 void UClimbForgeMovementComponent::MontageStarted(UAnimMontage* Montage)
 {
-
+	
 }
 
 void UClimbForgeMovementComponent::SetMotionWarpTarget(const FName& InWarpTargetName, const FVector& InTargetLocation)
