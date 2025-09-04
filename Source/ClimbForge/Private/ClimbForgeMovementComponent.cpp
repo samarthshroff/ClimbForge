@@ -69,6 +69,9 @@ void UClimbForgeMovementComponent::TickComponent(float DeltaTime, enum ELevelTic
 
 void UClimbForgeMovementComponent::OnMovementModeChanged(EMovementMode PreviousMovementMode, uint8 PreviousCustomMode)
 {
+	UE_LOG(LogTemp, Log, TEXT("OnMovementModeChanged MovementMode:: %d, CurrentQuat:: %s"),
+		int32(MovementMode), *UpdatedComponent->GetComponentQuat().ToString());
+	
 	if (IsClimbing())
 	{	
 		bOrientRotationToMovement = false;
@@ -79,6 +82,8 @@ void UClimbForgeMovementComponent::OnMovementModeChanged(EMovementMode PreviousM
 
 	if (PreviousMovementMode == MOVE_Custom && PreviousCustomMode == MOVE_Climbing)
 	{
+		ClearClimbData();
+		
 		bOrientRotationToMovement = true;		
 		CharacterOwner->GetCapsuleComponent()->SetCapsuleHalfHeight(OwnerColliderCapsuleHalfHeight);
 
@@ -327,12 +332,11 @@ void UClimbForgeMovementComponent::StartClimbing()
 	SetMovementMode(MOVE_Custom, MOVE_Climbing);
 }
 
+// Character has reached the lower ground (not the ledge). Climb down onto the ground
 void UClimbForgeMovementComponent::StopClimbing(const float DeltaTime, int32 Iterations)
 {
 	bCanStartClimb = false;
-	ClimbableSurfacesHits.Empty();
-	ClimbableSurfaceLocation = FVector::ZeroVector;
-	ClimbableSurfaceNormal = FVector::ZeroVector;
+	ClearClimbData();
 
 	FVector DropTargetLocation = UpdatedComponent->GetComponentLocation() -
 		(UpdatedComponent->GetForwardVector()*CharacterOwner->GetCapsuleComponent()->GetScaledCapsuleRadius());
@@ -643,7 +647,7 @@ void UClimbForgeMovementComponent::PhysClimbing(const float DeltaTime, int32 Ite
 
 	// TODO - Handle Climb rotation.
 	SafeMoveUpdatedComponent(Adjusted, GetClimbRotation(DeltaTime), true, Hit);
-	//SafeMoveUpdatedComponent(Adjusted, UpdatedComponent->GetComponentQuat(), true, Hit);
+	// //SafeMoveUpdatedComponent(Adjusted, UpdatedComponent->GetComponentQuat(), true, Hit);
 
 	if (Hit.Time < 1.f)
 	{
@@ -655,6 +659,10 @@ void UClimbForgeMovementComponent::PhysClimbing(const float DeltaTime, int32 Ite
 	if (HasReachedTheLedge())
 	{
 		//UE_LOG(LogTemp, Log, TEXT("Has reached Ledge"));
+		
+		// Clear surface normal before transitioning
+		ClimbableSurfaceNormal = FVector::ZeroVector;
+		
 		// Reset the character rotation leaving only the Yaw unaffected. This improves the motion when the character is climbing steep surfaces.
 		const FRotator StandRotation = FRotator(0, UpdatedComponent->GetComponentRotation().Yaw, 0);
 		UpdatedComponent->SetRelativeRotation(StandRotation);
@@ -743,6 +751,13 @@ FQuat UClimbForgeMovementComponent::GetClimbRotation(const float DeltaTime) cons
 	// 	UE_LOG(LogTemp, Log, TEXT("GetClimbRotation: HasOverrideVelocity"));
 	// 	
 	// }
+
+	// Return if neither climbing nor valid surface
+	if (!IsClimbing() || ClimbableSurfaceNormal.IsNearlyZero())
+	{
+		return CurrentQuat;
+	}
+	
 	// If we want to use the root motion to override the rotation
 	if (HasAnimRootMotion() && CurrentRootMotion.HasOverrideVelocity())
 	{
@@ -790,6 +805,16 @@ void UClimbForgeMovementComponent::PlayMontage(const TObjectPtr<UAnimMontage>& M
 	OwnerActorAnimInstance->Montage_Play(MontageToPlay);
 }
 
+// Clear climbing data BEFORE changing rotation.
+// Solves the bug where the character rotates when the forward vector is
+// NOT 1,0,0 after climb or vault complete. 
+void UClimbForgeMovementComponent::ClearClimbData()
+{
+	ClimbableSurfacesHits.Empty();
+	ClimbableSurfaceLocation = FVector::ZeroVector;
+	ClimbableSurfaceNormal = FVector::ZeroVector;
+}
+
 void UClimbForgeMovementComponent::MontageEnded(UAnimMontage* Montage, bool bInterrupted)
 {
 	if (Montage == ClimbDownFromLegdeMontage)
@@ -800,6 +825,8 @@ void UClimbForgeMovementComponent::MontageEnded(UAnimMontage* Montage, bool bInt
 	else
 	if (Montage == ClimbToTopMontage)
 	{
+		ClearClimbData();
+		
 		if (bUsedMotionWarpForLedgeClimb)
 		{
 			bUsedMotionWarpForLedgeClimb = false;
@@ -832,6 +859,7 @@ void UClimbForgeMovementComponent::MontageEnded(UAnimMontage* Montage, bool bInt
 	else
 	if (Montage == VaultingMontage)
 	{
+		ClearClimbData();		
 		SetMovementMode(MOVE_Walking);	
 	}
 }

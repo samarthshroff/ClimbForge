@@ -220,6 +220,7 @@ private:
 	void SnapToClimbableSurface(float DeltaTime) const;
 
 	void PlayMontage(const TObjectPtr<UAnimMontage>& MontageToPlay) const;
+	void ClearClimbData();
 
 	UFUNCTION()
 	void MontageEnded(UAnimMontage* Montage, bool bInterrupted);
