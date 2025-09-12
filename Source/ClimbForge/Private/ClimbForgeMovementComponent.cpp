@@ -522,8 +522,7 @@ bool UClimbForgeMovementComponent::CanStartVaulting(FVector& VaultStartPosition,
 	// Start traces this far above character's origin
 	constexpr float TraceHeightAboveChar = 100.0f;
 	// How far down the traces go
-	constexpr float VerticalTraceDepth = 100.0f;
-	const float VerticalTraceDepthSquaredHalf = (VerticalTraceDepth*VerticalTraceDepth)*0.5f;
+	const float VerticalTraceDepthSquaredHalf = (VaultVerticalTraceDepth*VaultVerticalTraceDepth)*0.5f;
 	// How many landing traces to perform after the initial vault obstacle trace
 	//constexpr int32 TotalLandingTraces = 5;
 
@@ -532,16 +531,24 @@ bool UClimbForgeMovementComponent::CanStartVaulting(FVector& VaultStartPosition,
 	const float InitialTraceDistance = FMath::Lerp(MinimumVaultTraceDistance, MaximumVaultTraceDistance, SpeedRatio);
 
 	const FVector ObstacleTraceStart = ComponentLocation + (UpVector * TraceHeightAboveChar) + (ForwardVector * InitialTraceDistance);
-	const FVector ObstacleTraceEnd = ObstacleTraceStart + (DownVector * VerticalTraceDepth);
+	const FVector ObstacleTraceEnd = ObstacleTraceStart + (DownVector * VaultVerticalTraceDepth);
 
-	const FHitResult ObstacleHit = LineTraceByChannel(ObstacleTraceStart, ObstacleTraceEnd);
+	const FHitResult ObstacleHit = LineTraceByChannel(ObstacleTraceStart, ObstacleTraceEnd, true, true);
 
 	if (!ObstacleHit.bBlockingHit)
 	{
 		// No obstacle found to vault over immediately in front.
 		return false;
 	}
-	if ( FVector::DistSquared(ObstacleHit.Location, ObstacleHit.TraceStart) < VerticalTraceDepthSquaredHalf )
+	//if ( FVector::DistSquared(ObstacleHit.Location, ObstacleHit.TraceStart) < VerticalTraceDepthSquaredHalf )
+
+	// If the ImpactPoint.Z falls within +/-25% from the Character.Z (inclusive) then it is a legit vault surface.
+	// Hard coding 25% because other values may not execute a real looking vault.
+	float ValidVaultRangeTolerance = ComponentLocation.Z*0.25;
+	float ValidVaultMinRange = ComponentLocation.Z-ValidVaultRangeTolerance;
+	float ValidVaultMaxRange = ComponentLocation.Z+ValidVaultRangeTolerance;
+	
+	if (ObstacleHit.Location.Z <= ValidVaultMinRange || ObstacleHit.Location.Z >= ValidVaultMaxRange)	
 	{
 		// If the impact point is closer to the trace start then
 		// the impact is probably a climbable surface instead of a vaulting surface.
@@ -563,7 +570,7 @@ bool UClimbForgeMovementComponent::CanStartVaulting(FVector& VaultStartPosition,
 	for (float Distance = 50.0f; Distance <= MaxVaultLength; Distance += 50.0f)
 	{
 		FVector Start = LandingTraceStart + ForwardVector * Distance;
-		FVector End = Start + (DownVector * VerticalTraceDepth);
+		FVector End = Start + (DownVector * VaultVerticalTraceDepth);
 		
 		ObstacleEdgeDetectionHit = LineTraceByChannel(Start, End);		
 		if (!ObstacleEdgeDetectionHit.bBlockingHit)
@@ -580,7 +587,7 @@ bool UClimbForgeMovementComponent::CanStartVaulting(FVector& VaultStartPosition,
 		// End of obstacle + padding
 		// Find the Ground Z or else vault montage will end mid air.
 		const FVector GroundZTraceStart = ObstacleEdgeLocation + ForwardVector * 30.0f;
-		const FVector GroundZTraceEnd = GroundZTraceStart + (DownVector * VerticalTraceDepth*5.0f);
+		const FVector GroundZTraceEnd = GroundZTraceStart + (DownVector * VaultVerticalTraceDepth*5.0f);
 		const FHitResult GroundHit = LineTraceByChannel(GroundZTraceStart, GroundZTraceEnd);
 		
 		if (GroundHit.bBlockingHit)

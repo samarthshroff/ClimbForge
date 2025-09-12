@@ -141,6 +141,9 @@ private:
 	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Character Movement: Vault", meta = (AllowPrivateAccess = "true"))
 	float MaximumVaultTraceDistance = 200.f;
 	
+	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Character Movement: Vault", meta = (AllowPrivateAccess = "true"))
+    float VaultVerticalTraceDepth = 150.f;
+	
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category= "Character Movement: Vault", meta=(AllowPrivateAccess=true))
 	TObjectPtr<UAnimMontage> VaultingMontage;
 	
