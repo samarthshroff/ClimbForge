@@ -19,6 +19,7 @@ public:
 	FOnEnterClimbingModeDelegate OnEnterClimbingMode;
 	FOnExitClimbingModeDelegate OnExitClimbingMode;
 	bool bCanStartClimb = false;	
+	bool bCanClimbWhileFalling = false;
 	
 private:
 #pragma region ClimbCoreVariables

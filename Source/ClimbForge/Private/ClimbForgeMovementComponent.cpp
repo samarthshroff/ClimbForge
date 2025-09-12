@@ -74,14 +74,12 @@ void UClimbForgeMovementComponent::TickComponent(float DeltaTime, enum ELevelTic
 
 void UClimbForgeMovementComponent::OnMovementModeChanged(EMovementMode PreviousMovementMode, uint8 PreviousCustomMode)
 {
-	UE_LOG(LogTemp, Log, TEXT("OnMovementModeChanged MovementMode:: %d, CurrentQuat:: %s"),
-		int32(MovementMode), *UpdatedComponent->GetComponentQuat().ToString());
-	
 	if (IsClimbing())
 	{	
 		bOrientRotationToMovement = false;
+		bCanClimbWhileFalling = false;
 		// Half of 96.0f that is in AClimbForgeCharacter constructor.
-		CharacterOwner->GetCapsuleComponent()->SetCapsuleHalfHeight(OwnerColliderCapsuleHalfHeight*0.5f);
+		CharacterOwner->GetCapsuleComponent()->SetCapsuleHalfHeight(OwnerColliderCapsuleHalfHeight*0.5f);		
 		OnEnterClimbingMode.ExecuteIfBound();
 	}
 
@@ -222,7 +220,7 @@ void UClimbForgeMovementComponent::ToggleClimbing(const bool bEnableClimb)
 
 bool UClimbForgeMovementComponent::CanStartClimbing()
 {
-	if (IsFalling()) return false;
+	if (IsFalling() && !bCanClimbWhileFalling) return false;
 	if(IsClimbing()) return false;
 	if (Velocity.IsNearlyZero()) return false;
 

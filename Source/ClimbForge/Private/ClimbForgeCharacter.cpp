@@ -126,6 +126,11 @@ void AClimbForgeCharacter::HandleGroundMovement(const FInputActionValue& Value)
 		// get right vector 
 		const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
 
+		if (ClimbForgeMovementComponent != nullptr && ClimbForgeMovementComponent->IsFalling() && MovementVector.Y > 0.0f)
+		{
+			ClimbForgeMovementComponent->bCanClimbWhileFalling = true;
+		}
+		
 		// add movement 
 		AddMovementInput(ForwardDirection, MovementVector.Y);
 		AddMovementInput(RightDirection, MovementVector.X);
