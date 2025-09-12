@@ -37,6 +37,6 @@ void UCharacterAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	bIsClimbing = OwnerMovementComponent->IsClimbing();
 	bIsClimbDashing = OwnerMovementComponent->IsClimbDashing();
 	ClimbDashDirection = OwnerMovementComponent->GetClimbDashDirection();
-	if (bIsClimbDashing) UE_LOG(LogTemp, Log, TEXT("ClimbDashDirection:: %s"), *ClimbDashDirection.ToString());
+	//if (bIsClimbDashing) UE_LOG(LogTemp, Log, TEXT("ClimbDashDirection:: %s"), *ClimbDashDirection.ToString());
 	//bClimbDownToFloorMontageFinished = OwnerMovementComponent->IsClimbDownToFloorMontageComplete();
 }

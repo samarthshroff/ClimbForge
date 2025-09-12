@@ -253,7 +253,7 @@ bool UClimbForgeMovementComponent::CanStartClimbing()
 		constexpr float BaseLength = 80.0f;
 		const float SteepnessMultiplier = 1.0f + (1.0f - Steepness) * 5.0f;
 	
-		FHitResult SurfaceAtEyeHeightTraceResult = TraceFromEyeHeight(BaseLength * SteepnessMultiplier, true, true);
+		FHitResult SurfaceAtEyeHeightTraceResult = TraceFromEyeHeight(BaseLength * SteepnessMultiplier);
 		
 		if (AngleInDegrees < MinimumClimbableAngleInDegrees && !bIsCeilingOrFloor && SurfaceAtEyeHeightTraceResult.bBlockingHit)
 		{
@@ -337,14 +337,12 @@ void UClimbForgeMovementComponent::StartClimbing()
 
 // Character has reached the lower ground (not the ledge). Climb down onto the ground
 void UClimbForgeMovementComponent::StopClimbing(const float DeltaTime, int32 Iterations)
-{
+{	
 	bCanStartClimb = false;
 	ClearClimbData();
 
-	FVector DropTargetLocation = UpdatedComponent->GetComponentLocation() -
-		(UpdatedComponent->GetForwardVector()*CharacterOwner->GetCapsuleComponent()->GetScaledCapsuleRadius());
-	FVector RootBoneLocation = GetCharacterOwner()->GetMesh()->GetBoneLocation(TEXT("root"));
-
+	FVector DropTargetLocation = UpdatedComponent->GetComponentLocation() -	(UpdatedComponent->GetForwardVector()*CharacterOwner->GetCapsuleComponent()->GetScaledCapsuleRadius());
+	
 	StopClimbDash();
 	SetMotionWarpTarget("ClimbDropLocation", DropTargetLocation);
 	PlayMontage(ClimbDownToFloorMontage);
@@ -378,18 +376,19 @@ FVector UClimbForgeMovementComponent::GetClimbDashDirection() const
 	return ClimbDashDirection;
 }
 
-bool UClimbForgeMovementComponent::TraceClimbableSurfaces()
+void UClimbForgeMovementComponent::TraceClimbableSurfaces()
 {
 	// Don't want to start right from the character location but a few units in front.
 	const FVector StartOffset = UpdatedComponent->GetForwardVector() * 1.0f;
 	const FVector Start = UpdatedComponent->GetComponentLocation() + StartOffset;
 
 	// Don't want too much distance between start and end as need to generate fewer capsules for collision. 
-	// In this case 2 start and end as the forward vector is a unit vector.
+	// In this case 2 capsules - start and end as the forward vector is a unit vector.
 	const FVector End = Start + UpdatedComponent->GetForwardVector();
 
-	ClimbableSurfacesHits = CapsuleSweepTraceByChannel(Start, End, true, false);
-	return !ClimbableSurfacesHits.IsEmpty();
+	ClimbableSurfacesHits = CapsuleSweepTraceByChannel(Start, End);
+	
+	//return !ClimbableSurfacesHits.IsEmpty();
 }
 
 FHitResult UClimbForgeMovementComponent::TraceFromEyeHeight(const float TraceDistance, const float TraceStartOffset, const bool bShowDebugShape, const bool bShowPersistent)
@@ -533,7 +532,7 @@ bool UClimbForgeMovementComponent::CanStartVaulting(FVector& VaultStartPosition,
 	const FVector ObstacleTraceStart = ComponentLocation + (UpVector * TraceHeightAboveChar) + (ForwardVector * InitialTraceDistance);
 	const FVector ObstacleTraceEnd = ObstacleTraceStart + (DownVector * VaultVerticalTraceDepth);
 
-	const FHitResult ObstacleHit = LineTraceByChannel(ObstacleTraceStart, ObstacleTraceEnd, true, true);
+	const FHitResult ObstacleHit = LineTraceByChannel(ObstacleTraceStart, ObstacleTraceEnd);
 
 	if (!ObstacleHit.bBlockingHit)
 	{
@@ -770,8 +769,7 @@ FQuat UClimbForgeMovementComponent::GetClimbRotation(const float DeltaTime) cons
 	
 	// If we want to use the root motion to override the rotation
 	if (HasAnimRootMotion() && CurrentRootMotion.HasOverrideVelocity())
-	{
-		UE_LOG(LogTemp, Log, TEXT("GetClimbRotation: return from the if"));
+	{		
 		return CurrentQuat;
 	}
 

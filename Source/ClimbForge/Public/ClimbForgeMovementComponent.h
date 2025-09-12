@@ -195,7 +195,7 @@ private:
 
 #pragma region ClimbCore - Private
 	// Trace for all climbable surfaces.
-	bool TraceClimbableSurfaces();
+	void TraceClimbableSurfaces();
 
 	// Trace from the eye height and see if the ray collides with an object.
 	// This helps us decide whether the character can climb.
