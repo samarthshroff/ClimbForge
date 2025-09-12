@@ -41,15 +41,15 @@ private:
 	FVector ClimbToLedgeTargetLocation;
 	float LedgeSurfaceSlopeDegrees;
 	bool bUsedMotionWarpForLedgeClimb = false;
+	
 
 	bool bIsClimbDashing = false;
 	bool bCancelClimbing = false;
 	float ClimbDashCurrentTime;
 
 	FVector ClimbDashDirection;
-	//bool bClimbDownToFloorMontageFinished = false;
-	
-	
+	float TimeSinceLastClimbTrace;
+		
 #pragma endregion
 	
 #pragma region ClimbBPVariables

@@ -30,20 +30,25 @@ void UClimbForgeMovementComponent::BeginPlay()
 		OwnerActorAnimInstance->OnMontageBlendingOut.AddDynamic(this, &UClimbForgeMovementComponent::MontageEnded);
 		//OwnerActorAnimInstance->OnMontageStarted.AddDynamic(this, &UClimbForgeMovementComponent::MontageStarted);
 	}
+
+	TimeSinceLastClimbTrace = 0.0f;
 }
 
 void UClimbForgeMovementComponent::TickComponent(float DeltaTime, enum ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-	if (!Velocity.IsNearlyZero())
+	TimeSinceLastClimbTrace += DeltaTime;
+	
+	if (!Velocity.IsNearlyZero() && TimeSinceLastClimbTrace >= 1/30.0f)
 	{
+		TimeSinceLastClimbTrace = 0.0f;
+		// Start the Climb - 1
 		TraceClimbableSurfaces();
-	}
-
-	// Start the Climb - 1
-	if (!bCanStartClimb && CanStartClimbing())
-	{
-		bCanStartClimb = true;
+		if (!bCanStartClimb && !ClimbableSurfacesHits.IsEmpty() && CanStartClimbing())
+		{
+			Velocity = Velocity*0.5f;
+			bCanStartClimb = true;
+		}
 	}
 	
 	// Walk a few steps after climbing the ledge so that character does not have a leg in air after climbing on top.
