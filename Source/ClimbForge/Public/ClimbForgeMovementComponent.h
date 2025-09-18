@@ -56,6 +56,8 @@ private:
 	float AngleStabilityBuffer = 3.0f;  // Degrees of tolerance
 	int32 ConsistentAngleFrames = 0;
 	int32 RequiredConsistentFrames = 2;  // Require 2 consistent readings
+
+	TArray<FHitResult> OutCapsuleTraceHitResult;
 		
 #pragma endregion
 	

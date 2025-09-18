@@ -171,7 +171,7 @@ FHitResult UClimbForgeMovementComponent::TraceFromEyeHeight(const float TraceDis
 
 TArray<FHitResult> UClimbForgeMovementComponent::CapsuleSweepTraceByChannel(const FVector& Start, const FVector& End, const bool bShowDebugShape, const bool bShowPersistent)
 {
-	TArray<FHitResult> OutCapsuleTraceHitResult;
+	OutCapsuleTraceHitResult.Reset();
 
 	const FCollisionShape CollisionShape = FCollisionShape::MakeCapsule(ClimbCollisionCapsuleRadius, ClimbCollisionCapsuleHalfHeight);	
 	
@@ -249,24 +249,23 @@ bool UClimbForgeMovementComponent::CanStartClimbing()
 	if(IsClimbing()) return false;
 	if (Velocity.IsNearlyZero()) return false;
 
+	float TraceLength = 80.0f;
+	const float EyeHeightFromFeet = CharacterOwner->GetPawnViewLocation().Z - GetActorFeetLocation().Z;
 	for (FHitResult& Hit : ClimbableSurfacesHits)
 	{
-		FVector UseNormal = Hit.ImpactNormal;
-
 		// Calculate the Dot Product between the Surface Normal and the Player's or world's Up Vector (assuming both are same in this case).
 		// This gives the actual slope of the surface instead of the slope relative to impact when we do dot product between the imapct normal and character forward.
-		float Dot = FVector::DotProduct(UseNormal.GetSafeNormal(),FVector::UpVector);
+		float Dot = FVector::DotProduct(Hit.ImpactNormal.GetSafeNormal(),FVector::UpVector);
 		Dot = FMath::Clamp(Dot, -1.0f,1.0f);
 		const float HorizontalRadian = FMath::Acos(Dot);
 		const float HorizontalDegrees = FMath::RadiansToDegrees(HorizontalRadian);
 		// Is ceiling if value is nearly 0 meaning parallel to floor.
 		//const bool bIsCeilingOrFloor = FMath::IsNearlyZero(HorizontalDegrees);
-		float TraceLength = 80.0f;
+		
 		// Get dynamic trace length based on the surface steepness.
 		if (HorizontalDegrees != 90.0f)
 		{
-			const float TanValue = FMath::Tan(HorizontalRadian);
-			const float EyeHeightFromFeet = CharacterOwner->GetPawnViewLocation().Z - GetActorFeetLocation().Z;
+			const float TanValue = FMath::Tan(HorizontalRadian);			
 			TraceLength += EyeHeightFromFeet*TanValue;
 		}
 
@@ -325,72 +324,29 @@ bool UClimbForgeMovementComponent::CanStartClimbing()
 		}
 	}
 	return false;
-	
-	/*if (IsFalling() && !bCanClimbWhileFalling) return false;
-	if(IsClimbing()) return false;
-	if (Velocity.IsNearlyZero()) return false;
-
-	const FVector MovementDirection = Velocity.GetSafeNormal();
-	
-	// Check if it is a climbable surface by checking it's slope in degrees.
-	for (FHitResult& Hit : ClimbableSurfacesHits)
-	{
-		//UE_LOG(LogTemp,Log, TEXT("The Dot Product is:: %f"), FVector::DotProduct(UpdatedComponent->GetForwardVector(), -1.0f*Hit.Normal.GetSafeNormal()));
-		
-		if (FVector::DotProduct(UpdatedComponent->GetForwardVector(), -1.0f*Hit.Normal.GetSafeNormal()) < 0.5f) continue;
-		
-		// This is in theory the surface (to climb) normal projected onto a horizontal plane as
-		// GetSafeNormal2D uses on X and Y components.
-		const FVector HorizontalProjectedNormal = Hit.Normal.GetSafeNormal2D();
-
-		// The slope or angle between the character forward and the hit normal. This determines if the surface is climbable.
-		const float HorizontalDot = FVector::DotProduct(UpdatedComponent->GetForwardVector(), -HorizontalProjectedNormal);
-		// This is theta = acos(a.b/|a|x|b|) as both the vectors are normalized or unit vector their magnitudes will be 1 thus 
-		// theta = acos(a.b)
-		const float AngleInDegrees = FMath::RadiansToDegrees(FMath::Acos(HorizontalDot));
-
-		// Detect if the surface to climb is a ceiling or not. If a ceiling then don't climb.
-		const float Steepness = FVector::DotProduct(Hit.Normal, HorizontalProjectedNormal);
-		// IF nearly zero means that the normal of this surface is parallel to upvector so it can be a ceiling or a floor
-		const bool bIsCeilingOrFloor = FMath::IsNearlyZero(Steepness);
-
-		// Calculate the length of the trace to use for checking if there is a surface at eye height. This check is for the surface that give
-		// a valid hit from the ClimbableSurfacesHits but are like small ledges that are not climbable.
-		constexpr float BaseLength = 80.0f;
-		const float SteepnessMultiplier = 1.0f + (1.0f - Steepness) * 5.0f;
-	
-		FHitResult SurfaceAtEyeHeightTraceResult = TraceFromEyeHeight(BaseLength * SteepnessMultiplier);
-		
-		if (AngleInDegrees < MinimumClimbableAngleInDegrees && !bIsCeilingOrFloor && SurfaceAtEyeHeightTraceResult.bBlockingHit)
-		{
-			return true;
-		}
-	}
-	return false;*/
 }
 
 bool UClimbForgeMovementComponent::CanStartClimbingDown()
 {
 	if(IsFalling()) return false;
+	
+	const FVector ComponentForward = UpdatedComponent->GetForwardVector();
+	const FVector DownVector = -1.0f * UpdatedComponent->GetUpVector();
 
-	 const FVector ComponentForward = UpdatedComponent->GetForwardVector();
-	 const FVector DownVector = -1.0f * UpdatedComponent->GetUpVector();
+	const FVector WalkableSurfaceTraceStart = UpdatedComponent->GetComponentLocation() + ComponentForward * ClimbDownWalkableSurfaceTraceOffset;
+	const FVector WalkableSurfaceTraceEnd = WalkableSurfaceTraceStart + DownVector * 112.0f;
 	
-	 const FVector WalkableSurfaceTraceStart = UpdatedComponent->GetComponentLocation() + ComponentForward * ClimbDownWalkableSurfaceTraceOffset;
-	 const FVector WalkableSurfaceTraceEnd = WalkableSurfaceTraceStart + DownVector * 125.f;
+	FHitResult WalkableSurfaceHit = LineTraceByChannel(WalkableSurfaceTraceStart,WalkableSurfaceTraceEnd);
 	
-	 FHitResult WalkableSurfaceHit = LineTraceByChannel(WalkableSurfaceTraceStart,WalkableSurfaceTraceEnd);
+	const FVector LedgeTraceStart = WalkableSurfaceHit.TraceStart + ComponentForward * ClimbDownLedgeTraceOffset;
+	const FVector LedgeTraceEnd = LedgeTraceStart + DownVector * 125.f;
 	
-	 const FVector LedgeTraceStart = WalkableSurfaceHit.TraceStart + ComponentForward * ClimbDownLedgeTraceOffset;
-	 const FVector LedgeTraceEnd = LedgeTraceStart + DownVector * 200.f;
+	FHitResult LedgeTraceHit = LineTraceByChannel(LedgeTraceStart,LedgeTraceEnd);
 	
-	 FHitResult LedgeTraceHit = LineTraceByChannel(LedgeTraceStart,LedgeTraceEnd);
-	
-	 if(WalkableSurfaceHit.bBlockingHit && !LedgeTraceHit.bBlockingHit)
-	 {
-	 	return true;
-	 }
-	
+	if(WalkableSurfaceHit.bBlockingHit && !LedgeTraceHit.bBlockingHit)
+	{
+		return true;
+	}
 	return false;
 }
 
