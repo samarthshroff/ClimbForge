@@ -179,10 +179,10 @@ void AClimbForgeCharacter::ClimbDashStarted(const FInputActionValue& Value)
 	if (ClimbForgeMovementComponent == nullptr) return;
 	if (ClimbForgeMovementComponent->IsClimbDashing())
 	{
-		Debug::Print(TEXT("Is Climb Dashing is true. Thus returning"), FColor::Red, 1);
+		//Debug::Print(TEXT("Is Climb Dashing is true. Thus returning"), FColor::Red, 1);
 		return;
 	}
-	Debug::Print(TEXT("Climb Dash Requested"), FColor::Red, 1);
+	//Debug::Print(TEXT("Climb Dash Requested"), FColor::Red, 1);
 	ClimbForgeMovementComponent->RequestClimbDash();
 }
 

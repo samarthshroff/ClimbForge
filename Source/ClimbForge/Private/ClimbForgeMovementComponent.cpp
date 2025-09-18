@@ -1,4 +1,4 @@
-﻿// Copyright (c) Samarth Shroff. All Rights Reserved.
+// Copyright (c) Samarth Shroff. All Rights Reserved.
 // This work is protected under applicable copyright laws in perpetuity.
 // Licensed under the CC BY-NC-ND 4.0 License. See LICENSE file for details.
 
@@ -44,9 +44,17 @@ void UClimbForgeMovementComponent::TickComponent(float DeltaTime, enum ELevelTic
 		TimeSinceLastClimbTrace = 0.0f;
 		// Start the Climb - 1
 		TraceClimbableSurfaces();
+		//UE_LOG(LogTemp, Log, TEXT("ClimbableSurfacesHits.Num:: %d "), ClimbableSurfacesHits.Num());
+
+		// Reset angle tracking if no climbable surfaces found
+		if (ClimbableSurfacesHits.IsEmpty())
+		{
+			LastHorizontalDegrees = -1.0f;
+			ConsistentAngleFrames = 0;
+		}
+
 		if (!bCanStartClimb && !ClimbableSurfacesHits.IsEmpty() && CanStartClimbing())
 		{
-			Velocity = Velocity*0.5f;
 			bCanStartClimb = true;
 		}
 	}
@@ -152,6 +160,15 @@ FVector UClimbForgeMovementComponent::ConstrainAnimRootMotionVelocity(const FVec
 #pragma endregion 
 
 #pragma region ClimbTraces
+
+FHitResult UClimbForgeMovementComponent::TraceFromEyeHeight(const float TraceDistance, const float TraceStartOffset, const bool bShowDebugShape, const bool bShowPersistent)
+{
+	const FVector EyeHeightOffset = UpdatedComponent->GetUpVector() * (CharacterOwner->BaseEyeHeight + TraceStartOffset);
+	const FVector Start = UpdatedComponent->GetComponentLocation() + EyeHeightOffset;
+	const FVector End = Start + (UpdatedComponent->GetForwardVector() * TraceDistance);
+	return LineTraceByChannel(Start, End, bShowDebugShape, bShowPersistent);
+}
+
 TArray<FHitResult> UClimbForgeMovementComponent::CapsuleSweepTraceByChannel(const FVector& Start, const FVector& End, const bool bShowDebugShape, const bool bShowPersistent)
 {
 	TArray<FHitResult> OutCapsuleTraceHitResult;
@@ -218,9 +235,98 @@ void UClimbForgeMovementComponent::ToggleClimbing(const bool bEnableClimb)
 	}
 }
 
+void UClimbForgeMovementComponent::DrawNormal(const FVector StartLocation, const FVector NormalVector, const FColor Color)
+{
+	float LineLength = 50.0f; // Adjust as needed
+	FVector EndLocation = StartLocation + (NormalVector * LineLength);
+
+	DrawDebugLine(GetWorld(), StartLocation, EndLocation, Color, false, 60.0f,0,1.0f);
+}
+
 bool UClimbForgeMovementComponent::CanStartClimbing()
 {
 	if (IsFalling() && !bCanClimbWhileFalling) return false;
+	if(IsClimbing()) return false;
+	if (Velocity.IsNearlyZero()) return false;
+
+	for (FHitResult& Hit : ClimbableSurfacesHits)
+	{
+		FVector UseNormal = Hit.ImpactNormal;
+
+		// Calculate the Dot Product between the Surface Normal and the Player's or world's Up Vector (assuming both are same in this case).
+		// This gives the actual slope of the surface instead of the slope relative to impact when we do dot product between the imapct normal and character forward.
+		float Dot = FVector::DotProduct(UseNormal.GetSafeNormal(),FVector::UpVector);
+		Dot = FMath::Clamp(Dot, -1.0f,1.0f);
+		const float HorizontalRadian = FMath::Acos(Dot);
+		const float HorizontalDegrees = FMath::RadiansToDegrees(HorizontalRadian);
+		// Is ceiling if value is nearly 0 meaning parallel to floor.
+		//const bool bIsCeilingOrFloor = FMath::IsNearlyZero(HorizontalDegrees);
+		float TraceLength = 80.0f;
+		// Get dynamic trace length based on the surface steepness.
+		if (HorizontalDegrees != 90.0f)
+		{
+			const float TanValue = FMath::Tan(HorizontalRadian);
+			const float EyeHeightFromFeet = CharacterOwner->GetPawnViewLocation().Z - GetActorFeetLocation().Z;
+			TraceLength += EyeHeightFromFeet*TanValue;
+		}
+
+		// Bug - Angle reading is not stable - Example, for a 45degree wall it should not be climbable when the min climb angle ius 50 but
+		// character does climb because code gives out 50 degrees in the second or 3rd ame loop depending on speed.
+		// One factor can be because I am running the logic at 30Hz.
+		
+		// Angle stability check to prevent flickering between frames
+		// Only track stability for angles that meet minimum requirements to prevent false positives
+		bool bAngleIsStable = false;
+		if (HorizontalDegrees >= (MinimumClimbableAngleInDegrees - 1.0f))
+		{
+			if (LastHorizontalDegrees < 0.0f)
+			{
+				// First valid measurement, store and require next frame for confirmation
+				LastHorizontalDegrees = HorizontalDegrees;
+				ConsistentAngleFrames = 1;
+				// UE_LOG(LogTemp, Log, TEXT("ANGLE_TRACK: First valid measurement - HorizontalDegrees:: %f >= %f && TraceLength:: %f"), HorizontalDegrees, MinimumClimbableAngleInDegrees - 1.0f, TraceLength);
+			}
+			else
+			{
+				// Check if current angle is within stability buffer of previous measurement
+				const float AngleDifference = FMath::Abs(HorizontalDegrees - LastHorizontalDegrees);
+				if (AngleDifference <= AngleStabilityBuffer)
+				{
+					ConsistentAngleFrames++;
+					if (ConsistentAngleFrames >= RequiredConsistentFrames)
+					{
+						bAngleIsStable = true;
+					}
+					// UE_LOG(LogTemp, Log, TEXT("ANGLE_TRACK: Consistent valid angle - HorizontalDegrees:: %f (diff: %f) Frames: %d/%d"), HorizontalDegrees, AngleDifference, ConsistentAngleFrames, RequiredConsistentFrames);
+				}
+				else
+				{
+					// Angle changed significantly, reset tracking
+					LastHorizontalDegrees = HorizontalDegrees;
+					ConsistentAngleFrames = 1;
+					// UE_LOG(LogTemp, Warning, TEXT("ANGLE_TRACK: Reset valid angle - HorizontalDegrees:: %f (diff: %f too large) && TraceLength:: %f"), HorizontalDegrees, AngleDifference, TraceLength);
+				}
+			}
+		}
+		else
+		{
+			// Below minimum angle - reset tracking to prevent false positives
+			LastHorizontalDegrees = -1.0f;
+			ConsistentAngleFrames = 0;
+			//UE_LOG(LogTemp, Log, TEXT("ANGLE_TRACK: Below threshold - HorizontalDegrees:: %f < %f (reset tracking)"), HorizontalDegrees, MinimumClimbableAngleInDegrees - 1.0f);
+		}
+
+		FHitResult SurfaceAtEyeHeightTraceResult = TraceFromEyeHeight(TraceLength, 0.0f);
+		// Only allow climbing if angle is stable and meets minimum requirements
+		if (bAngleIsStable && HorizontalDegrees >= (MinimumClimbableAngleInDegrees-1.0f) && SurfaceAtEyeHeightTraceResult.bBlockingHit)
+		{
+			//UE_LOG(LogTemp, Log, TEXT("ANGLE_TRACK: CLIMB ALLOWED - Stable angle: %f >= %f"), HorizontalDegrees, MinimumClimbableAngleInDegrees-1.0f);
+			return true;
+		}
+	}
+	return false;
+	
+	/*if (IsFalling() && !bCanClimbWhileFalling) return false;
 	if(IsClimbing()) return false;
 	if (Velocity.IsNearlyZero()) return false;
 
@@ -260,7 +366,7 @@ bool UClimbForgeMovementComponent::CanStartClimbing()
 			return true;
 		}
 	}
-	return false;
+	return false;*/
 }
 
 bool UClimbForgeMovementComponent::CanStartClimbingDown()
@@ -316,10 +422,13 @@ bool UClimbForgeMovementComponent::ShouldStopClimbing()
 	// Determine if the surface is climbable.
 	bool bIsClimbableSurface = true; // Assume climbable by default
 
+	//UE_LOG(LogTemp, Log, TEXT("DotProduct:: %f"), DotProduct);
+
 	if (DotProduct < CeilingDotProductThreshold || DotProduct > FloorDotProductThreshold)
 	{
 	    // The surface normal is pointing predominantly upwards. This is a floor.
 	    bIsClimbableSurface = false;
+		//UE_LOG(LogTemp, Log, TEXT("The surface normal is pointing predominantly upwards. This is a floor. DotProduct:: %f"), DotProduct);
 	}
 	else
 	{
@@ -339,9 +448,10 @@ void UClimbForgeMovementComponent::StartClimbing()
 void UClimbForgeMovementComponent::StopClimbing(const float DeltaTime, int32 Iterations)
 {	
 	bCanStartClimb = false;
+	bCanClimbWhileFalling = false;
 	ClearClimbData();
 
-	FVector DropTargetLocation = UpdatedComponent->GetComponentLocation() -	(UpdatedComponent->GetForwardVector()*CharacterOwner->GetCapsuleComponent()->GetScaledCapsuleRadius());
+	FVector DropTargetLocation = UpdatedComponent->GetComponentLocation() -	(UpdatedComponent->GetForwardVector()*2.0f*ClimbTraceOffset);
 	
 	StopClimbDash();
 	SetMotionWarpTarget("ClimbDropLocation", DropTargetLocation);
@@ -379,7 +489,7 @@ FVector UClimbForgeMovementComponent::GetClimbDashDirection() const
 void UClimbForgeMovementComponent::TraceClimbableSurfaces()
 {
 	// Don't want to start right from the character location but a few units in front.
-	const FVector StartOffset = UpdatedComponent->GetForwardVector() * 1.0f;
+	const FVector StartOffset = UpdatedComponent->GetForwardVector() * ClimbTraceOffset;
 	const FVector Start = UpdatedComponent->GetComponentLocation() + StartOffset;
 
 	// Don't want too much distance between start and end as need to generate fewer capsules for collision. 
@@ -389,14 +499,6 @@ void UClimbForgeMovementComponent::TraceClimbableSurfaces()
 	ClimbableSurfacesHits = CapsuleSweepTraceByChannel(Start, End);
 	
 	//return !ClimbableSurfacesHits.IsEmpty();
-}
-
-FHitResult UClimbForgeMovementComponent::TraceFromEyeHeight(const float TraceDistance, const float TraceStartOffset, const bool bShowDebugShape, const bool bShowPersistent)
-{
-	const FVector EyeHeightOffset = UpdatedComponent->GetUpVector() * (CharacterOwner->BaseEyeHeight + TraceStartOffset);
-	const FVector Start = UpdatedComponent->GetComponentLocation() + EyeHeightOffset;
-	const FVector End = Start + (UpdatedComponent->GetForwardVector() * TraceDistance);
-	return LineTraceByChannel(Start, End, bShowDebugShape, bShowPersistent);
 }
 
 bool UClimbForgeMovementComponent::HasReachedTheFloor()
@@ -449,19 +551,21 @@ bool UClimbForgeMovementComponent::HasReachedTheLedge()
 
 		if (WalkableSurfaceHit.bBlockingHit && WalkableSurfaceHit.Normal.Z >= GetWalkableFloorZ())
 		{
-			// Do a capsule sweep that mimics tha character and see if it has hits. If it has hits then character cannot climb up the ledge.
-			// This is (CompLoc.X, WalkableSurfaceStart.Y, WalkableSurfaceStart.Z) == right above the character.			
-			const FVector CapsuleStart = FVector(UpdatedComponent->GetComponentLocation().X, WalkableSurfaceStart.Y, WalkableSurfaceStart.Z);
-			FCollisionShape CapsuleCollision = FCollisionShape::MakeCapsule(ClimbCollisionCapsuleRadius, OwnerColliderCapsuleHalfHeight);
-			FHitResult CapsuleHit;
-			const bool bCapsuleHit = GetWorld()->SweepSingleByChannel(CapsuleHit, CapsuleStart, WalkableSurfaceStart, FQuat::Identity,
-				ClimbableSurfaceTraceChannel, CapsuleCollision, ClimbQueryParams);
+			// May work on this in the future. For now commenting it out as this prohibits the character from climbing on narrow ledges..
+			// Like the one found in the demo map where there are narrow ledges found at places on the cliffs.
 			
-			// DrawDebugCapsuleTraceSingle(GetWorld(), CapsuleStart, WalkableSurfaceStart, ClimbCollisionCapsuleRadius, 
-			// OwnerColliderCapsuleHalfHeight, EDrawDebugTrace::ForOneFrame, bCapsuleHit, CapsuleHit, FLinearColor::Red, FLinearColor::Green, 25.0f);
-
-			if (!bCapsuleHit)
-			{
+			// // Do a capsule sweep that mimics tha character and see if it has hits. If it has hits then character cannot climb up the ledge.
+			// // This is (CompLoc.X, WalkableSurfaceStart.Y, WalkableSurfaceStart.Z) == right above the character.			
+			// const FVector CapsuleStart = FVector(UpdatedComponent->GetComponentLocation().X, WalkableSurfaceStart.Y, WalkableSurfaceStart.Z);
+			// FCollisionShape CapsuleCollision = FCollisionShape::MakeCapsule(ClimbCollisionCapsuleRadius, OwnerColliderCapsuleHalfHeight);
+			// FHitResult CapsuleHit;
+			// const bool bCapsuleHit = GetWorld()->SweepSingleByChannel(CapsuleHit, CapsuleStart, WalkableSurfaceStart, FQuat::Identity,
+			// 	ClimbableSurfaceTraceChannel, CapsuleCollision, ClimbQueryParams);
+			//
+			// // DrawDebugCapsuleTraceSingle(GetWorld(), CapsuleStart, WalkableSurfaceStart, ClimbCollisionCapsuleRadius, 
+			// // OwnerColliderCapsuleHalfHeight, EDrawDebugTrace::ForOneFrame, bCapsuleHit, CapsuleHit, FLinearColor::Red, FLinearColor::Green, 25.0f);
+			// if (!bCapsuleHit)
+			// {
 				ClimbToLedgeTargetLocation = WalkableSurfaceHit.Location;
 				// Check the slope of the ledge. If it is not flat then we have to give the Target location
 				// to the montage via motion warp so that by the end of the animation montage the character is almost at the
@@ -479,7 +583,7 @@ bool UClimbForgeMovementComponent::HasReachedTheLedge()
 				{
 					return true;
 				}
-			}
+			//}
 		}
 	} 
 
@@ -821,6 +925,10 @@ void UClimbForgeMovementComponent::ClearClimbData()
 	ClimbableSurfacesHits.Empty();
 	ClimbableSurfaceLocation = FVector::ZeroVector;
 	ClimbableSurfaceNormal = FVector::ZeroVector;
+
+	// Reset angle stability tracking
+	LastHorizontalDegrees = -1.0f;
+	ConsistentAngleFrames = 0;
 }
 
 void UClimbForgeMovementComponent::MontageEnded(UAnimMontage* Montage, bool bInterrupted)

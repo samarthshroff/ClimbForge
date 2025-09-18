@@ -1,4 +1,4 @@
-﻿// Copyright (c) Samarth Shroff. All Rights Reserved.
+// Copyright (c) Samarth Shroff. All Rights Reserved.
 // This work is protected under applicable copyright laws in perpetuity.
 // Licensed under the CC BY-NC-ND 4.0 License. See LICENSE file for details.
 #pragma once
@@ -50,6 +50,12 @@ private:
 
 	FVector ClimbDashDirection;
 	float TimeSinceLastClimbTrace;
+
+	// Angle stability tracking
+	float LastHorizontalDegrees = -1.0f;
+	float AngleStabilityBuffer = 3.0f;  // Degrees of tolerance
+	int32 ConsistentAngleFrames = 0;
+	int32 RequiredConsistentFrames = 2;  // Require 2 consistent readings
 		
 #pragma endregion
 	
@@ -84,6 +90,9 @@ private:
 	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Character Movement: Climb",meta = (AllowPrivateAccess = "true"))
 	float ClimbDownLedgeTraceOffset = 50.f;
 
+	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Character Movement: Climb",meta = (AllowPrivateAccess = "true"))
+	float ClimbTraceOffset = 20.f;
+	
 	// The length of the trace
 	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Character Movement: Climb",meta = (AllowPrivateAccess = "true"))
 	float ClimbDashTraceLength = 100.0f;
@@ -191,17 +200,16 @@ private:
 	// at the given start and end, usually the eye height, as character can be in front of a ledge which would come as a
 	// hit from the capsule sweep but is not a legit climbable surface.
 	FHitResult LineTraceByChannel(const FVector& Start, const FVector& End, const bool bShowDebugShape = false, const bool bShowPersistent = false);
-#pragma endregion
-
-#pragma region ClimbCore - Private
-	// Trace for all climbable surfaces.
-	void TraceClimbableSurfaces();
 
 	// Trace from the eye height and see if the ray collides with an object.
 	// This helps us decide whether the character can climb.
 	FHitResult TraceFromEyeHeight(const float TraceDistance, const float TraceStartOffset = 0.0f, const bool bShowDebugShape = false, const bool 
 	bShowPersistent = false);
+#pragma endregion
 
+#pragma region ClimbCore - Private
+	// Trace for all climbable surfaces.
+	void TraceClimbableSurfaces();
 	bool CanStartClimbing();
 	bool CanStartClimbingDown();	
 	bool ShouldStopClimbing();
@@ -238,6 +246,10 @@ private:
 	void UpdateClimbDash(float DeltaTime);
 
 	void StopClimbDash();
-	
+
+	bool RefineTriangleNormalAt(const UWorld* W, const FHitResult& BroadHit, FHitResult& OutTri);
+	void DrawNormal(const FVector StartLocation, const FVector NormalVector, const FColor Color);
 #pragma endregion
+
+	
 };
