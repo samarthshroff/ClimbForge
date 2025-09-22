@@ -25,6 +25,8 @@ private:
 #pragma region ClimbCoreVariables
 	TArray<FHitResult> ClimbableSurfacesHits;
 
+	TObjectPtr<UCapsuleComponent> CharacterCapsuleComponent;
+
 	FCollisionQueryParams ClimbQueryParams;
 
 	FVector ClimbableSurfaceLocation;
@@ -57,7 +59,12 @@ private:
 	int32 ConsistentAngleFrames = 0;
 	int32 RequiredConsistentFrames = 2;  // Require 2 consistent readings
 
+	// Smart trace throttling variables
+	float LastVelocityMagnitude = 0.0f;
+	FVector LastVelocityDirection = FVector::ZeroVector;
+
 	TArray<FHitResult> OutCapsuleTraceHitResult;
+	float TraceLength = 80.0f;
 		
 #pragma endregion
 	
