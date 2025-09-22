@@ -7,8 +7,17 @@ ClimbForge is an advanced Unreal Engine climbing movement system, inspired by th
 - **Custom Movement Modes:**  
   Implements a custom climbing movement mode through UE’s extensible movement system (`MOVE_Custom`, `MOVE_Climbing`), including smooth transitions between walking, climbing, vaulting, and falling.
 
+- **Climb Dash Mechanic:**  
+  Implements a climb dash feature allowing the character to dash in various directions while climbing, including support for distinct dash montages and customizable dash curves.
+
+- **Dynamic Vault Trace Configuration:**  
+  Exposes minimum and maximum vault trace distances and vault vertical trace depth as configurable parameters, enabling fine-tuning of vault detection behavior.
+
 - **Component-Based Design:**  
   Utilizes custom components (`UClimbForgeMovementComponent`, `UMotionWarpingComponent`) for modularity and maintainability.
+
+- **Component Accessors:**  
+  Provides accessor functions for the custom movement and motion warping components, as well as camera and spring arm components, for streamlined integration and extension.
 
 - **Blueprint & C++ Hybrid:**  
   Core climbing logic is written in C++ for optimal performance, exposed to Blueprints for designer-friendly tuning and animation montage integration.
@@ -34,6 +43,12 @@ ClimbForge is an advanced Unreal Engine climbing movement system, inspired by th
 - **Physics & Root Motion:**  
   Constrained root motion velocity and customized acceleration/deceleration for realistic climbing feel.
 
+- **Debug Utilities:**  
+  Includes a debug helper namespace to print messages both to the on-screen display and the log, facilitating rapid prototyping and visualization during development.
+
+- **Floor Detection and Climb Termination:**  
+  Contains logic for detecting when the character has reached the floor after climbing down from a ledge and for handling the proper transition to ground movement.
+
 ### Vector Math Highlights
 
 - **Surface Normal and Direction Calculation:**  
@@ -53,6 +68,9 @@ ClimbForge is an advanced Unreal Engine climbing movement system, inspired by th
 
 - **Dynamic Climbing Velocity:**  
   Handles rotation and projection of velocity vectors to ensure movement is always aligned with the climbing surface, including “unrotating” velocity using quaternions (`UKismetMathLibrary::Quat_UnrotateVector`).
+
+- **Dynamic Climb Trace Length:**  
+  Adjusts trace length for climb detection dynamically based on the steepness of the surface, improving responsiveness and accuracy when transitioning between surface types.
 
 - **Trace Calculations:**  
   All traces (for climb, ledge, vault, etc.) are positionally offset and use vector math for direction, length, and surface normal evaluation.
